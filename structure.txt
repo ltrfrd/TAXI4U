@@ -1,0 +1,33 @@
+PROJECT: TAXI4U Fare System
+
+CURRENT STATE:
+- Fare matrix loaded from JSON
+- Zone detection using keyword mapping
+- Trip preparation, validation, and confirmation implemented
+- Fare calculation fully working
+- Unknown zone handling added
+
+WORKFLOW:
+1. Input text (pickup/dropoff)
+2. Detect zones (zone_mapper.py)
+3. Prepare trip (calculator.py)
+4. Validate trip
+5. Confirm trip
+6. Calculate fare
+
+RULES:
+- No input() inside core logic
+- All logic must be reusable (app-ready)
+- Keep functions separated by responsibility
+
+NEXT STEP:
+- Improve zone detection accuracy
+- Then move to API (FastAPI)
+
+ENVIRONMENT:
+- No venv yet
+- Activate venv when installing packages
+
+HOW TO RESUME IN NEW CHAT:
+- Say: "Continue TAXI4U project"
+- Provide README.md + structure.txt

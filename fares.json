@@ -1,0 +1,31 @@
+{
+  "Downtown/Quarry": {
+    "Downtown/Quarry": 11,
+    "East End/Industrial": 12,
+    "Riverview/Greystone": 12,
+    "SLS Centre (SLRC)": 13,
+    "Glenbow": 12,
+    "West Valley/Mitford": 13,
+    "West Terrace/Pointe": 15,
+    "Cochrane Heights": 13,
+    "Sunterra": 14,
+    "GE (Close/EV/Sum/Vista)": 16,
+    "GE (View/Haven/Est Ln)": 18,
+    "Bow Meadows/Crawford": 14,
+    "Bow Ridge/Jumping Pound": 16,
+    "Fireside (Business Area)": 17,
+    "Fireside (Residential)": 18,
+    "Willows/Rivercrest/Ford": 18,
+    "Riversong/BVHS": 18,
+    "Riviera/Precedence": 17,
+    "H.Land/Heritage (Shallow)": 17,
+    "H.Land/Heritage (Majority)": 18,
+    "Sunset (Before Sunset Rd)": 18,
+    "Sunset (On/Past Sunset Rd)": 19,
+    "Seminary/Interpipeline": 20,
+    "Monterra/Coch Lk/Camden": 22,
+    "Spring Hill RV/Cook Rd": 25,
+    "LRT (Crowfoot/Tuscany)": 50,
+    "Airports (All)": 90
+  }
+}
