@@ -12,7 +12,7 @@ from calculator import (
     prepare_trip_data,
     validate_trip_data,
 )
-from geocoder import geocode_address
+from geocoder import geocode_address, normalize_input
 from routing import get_route
 from zone_mapper import ZONES, detect_zone, detect_possible_zones, detect_zone_by_coords
 
@@ -90,6 +90,17 @@ class FareRequest(BaseModel):
 # -----------------------------------------------------------
 @app.post("/fare/calculate")
 def calculate_fare_endpoint(request: FareRequest):
+    # --- Validate inputs before any geocoding ---
+    _, pickup_err = normalize_input(request.pickup)
+    _, dropoff_err = normalize_input(request.dropoff)
+    if pickup_err or dropoff_err:
+        return {
+            "ok": False,
+            "error": pickup_err or dropoff_err,
+            "pickup_error": pickup_err,
+            "dropoff_error": dropoff_err,
+        }
+
     # --- Geocode both addresses ---
     pickup_coords = geocode_address(request.pickup)
     dropoff_coords = geocode_address(request.dropoff)
