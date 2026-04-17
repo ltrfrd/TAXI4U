@@ -14,7 +14,7 @@ from calculator import (
 )
 from geocoder import geocode_address
 from routing import get_route
-from zone_mapper import detect_zone, detect_possible_zones, detect_zone_by_coords
+from zone_mapper import ZONES, detect_zone, detect_possible_zones, detect_zone_by_coords
 
 
 app = FastAPI(title="TAXI4U Fare API")
@@ -30,6 +30,13 @@ DISTANCE_FALLBACK_KM = 10
 def home():
     return {
         "message": "TAXI4U Fare API is running"
+    }
+
+
+@app.get("/zones")
+def get_zones():
+    return {
+        "zones": ZONES
     }
 
 

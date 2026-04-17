@@ -11,8 +11,6 @@ export default function ResultScreen({ navigation, route }) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-
-      {/* Fare amount — most important, shown first */}
       <View style={styles.fareCard}>
         <Text style={styles.fareLabel}>Estimated Fare</Text>
         <Text style={styles.fareAmount}>${totalFare?.toFixed(2)}</Text>
@@ -21,17 +19,16 @@ export default function ResultScreen({ navigation, route }) {
         </Text>
       </View>
 
-      {/* Zone info */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Zones</Text>
         <Row label="Pickup Zone" value={result.pickup_zone} />
         <Row label="Dropoff Zone" value={result.dropoff_zone} />
-        <Row label="Detection" value={
-          `Pickup: ${result.pickup_detection_confidence ?? '—'}  ·  Dropoff: ${result.dropoff_detection_confidence ?? '—'}`
-        } />
+        <Row
+          label="Detection"
+          value={`Pickup: ${result.pickup_detection_confidence ?? '-'} | Dropoff: ${result.dropoff_detection_confidence ?? '-'}`}
+        />
       </View>
 
-      {/* Route info */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Route</Text>
         <Row
@@ -44,7 +41,6 @@ export default function ResultScreen({ navigation, route }) {
         />
       </View>
 
-      {/* Zone fare breakdown when applicable */}
       {isZoneFare && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Fare Breakdown</Text>
@@ -55,13 +51,20 @@ export default function ResultScreen({ navigation, route }) {
       )}
 
       <TouchableOpacity
+        style={styles.mapButton}
+        onPress={() => navigation.navigate('Map', { result })}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.mapButtonText}>Open Live Map</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
         style={styles.backButton}
         onPress={() => navigation.goBack()}
         activeOpacity={0.8}
       >
         <Text style={styles.backButtonText}>New Fare Estimate</Text>
       </TouchableOpacity>
-
     </ScrollView>
   );
 }
@@ -70,7 +73,7 @@ function Row({ label, value }) {
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value ?? '—'}</Text>
+      <Text style={styles.rowValue}>{value ?? '-'}</Text>
     </View>
   );
 }
@@ -145,6 +148,19 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     textAlign: 'right',
     marginLeft: 8,
+  },
+  mapButton: {
+    backgroundColor: '#f5c518',
+    borderRadius: 10,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  mapButtonText: {
+    color: '#1a1a2e',
+    fontSize: 15,
+    fontWeight: '700',
   },
   backButton: {
     backgroundColor: '#16213e',

@@ -4,18 +4,35 @@
     "slug": "taxi4u",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#1a1a2e"
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "TAXI4U uses your location on the live map to show your current zone while the app is open."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#1a1a2e"
-      }
-    }
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "TAXI4U uses your location on the live map to show your current zone while the app is open.",
+          "isAndroidBackgroundLocationEnabled": false,
+          "isIosBackgroundLocationEnabled": false
+        }
+      ],
+      "expo-asset"
+    ]
   }
 }

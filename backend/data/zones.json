@@ -1,0 +1,255 @@
+[
+  {
+    "name": "SLS Centre (SLRC)",
+    "priority": 1,
+    "color": "#118ab2",
+    "polygon": [
+      { "latitude": 51.188, "longitude": -114.462 },
+      { "latitude": 51.188, "longitude": -114.443 },
+      { "latitude": 51.2, "longitude": -114.443 },
+      { "latitude": 51.2, "longitude": -114.462 }
+    ]
+  },
+  {
+    "name": "Fireside (Business Area)",
+    "priority": 2,
+    "color": "#06d6a0",
+    "polygon": [
+      { "latitude": 51.18, "longitude": -114.488 },
+      { "latitude": 51.18, "longitude": -114.465 },
+      { "latitude": 51.192, "longitude": -114.465 },
+      { "latitude": 51.192, "longitude": -114.488 }
+    ]
+  },
+  {
+    "name": "Fireside (Residential)",
+    "priority": 3,
+    "color": "#2a9d8f",
+    "polygon": [
+      { "latitude": 51.16, "longitude": -114.505 },
+      { "latitude": 51.16, "longitude": -114.462 },
+      { "latitude": 51.182, "longitude": -114.462 },
+      { "latitude": 51.182, "longitude": -114.505 }
+    ]
+  },
+  {
+    "name": "H.Land/Heritage (Shallow)",
+    "priority": 4,
+    "color": "#8ecae6",
+    "polygon": [
+      { "latitude": 51.205, "longitude": -114.462 },
+      { "latitude": 51.205, "longitude": -114.435 },
+      { "latitude": 51.222, "longitude": -114.435 },
+      { "latitude": 51.222, "longitude": -114.462 }
+    ]
+  },
+  {
+    "name": "H.Land/Heritage (Majority)",
+    "priority": 5,
+    "color": "#219ebc",
+    "polygon": [
+      { "latitude": 51.22, "longitude": -114.462 },
+      { "latitude": 51.22, "longitude": -114.433 },
+      { "latitude": 51.238, "longitude": -114.433 },
+      { "latitude": 51.238, "longitude": -114.462 }
+    ]
+  },
+  {
+    "name": "Sunset (Before Sunset Rd)",
+    "priority": 6,
+    "color": "#3a86ff",
+    "polygon": [
+      { "latitude": 51.232, "longitude": -114.468 },
+      { "latitude": 51.232, "longitude": -114.438 },
+      { "latitude": 51.25, "longitude": -114.438 },
+      { "latitude": 51.25, "longitude": -114.468 }
+    ]
+  },
+  {
+    "name": "Sunset (On/Past Sunset Rd)",
+    "priority": 7,
+    "color": "#8338ec",
+    "polygon": [
+      { "latitude": 51.245, "longitude": -114.468 },
+      { "latitude": 51.245, "longitude": -114.436 },
+      { "latitude": 51.265, "longitude": -114.436 },
+      { "latitude": 51.265, "longitude": -114.468 }
+    ]
+  },
+  {
+    "name": "Glenbow",
+    "priority": 8,
+    "color": "#e76f51",
+    "polygon": [
+      { "latitude": 51.178, "longitude": -114.455 },
+      { "latitude": 51.178, "longitude": -114.428 },
+      { "latitude": 51.195, "longitude": -114.428 },
+      { "latitude": 51.195, "longitude": -114.455 }
+    ]
+  },
+  {
+    "name": "Riverview/Greystone",
+    "priority": 9,
+    "color": "#43aa8b",
+    "polygon": [
+      { "latitude": 51.172, "longitude": -114.47 },
+      { "latitude": 51.172, "longitude": -114.443 },
+      { "latitude": 51.187, "longitude": -114.443 },
+      { "latitude": 51.187, "longitude": -114.47 }
+    ]
+  },
+  {
+    "name": "Riviera/Precedence",
+    "priority": 10,
+    "color": "#f3722c",
+    "polygon": [
+      { "latitude": 51.168, "longitude": -114.458 },
+      { "latitude": 51.168, "longitude": -114.428 },
+      { "latitude": 51.183, "longitude": -114.428 },
+      { "latitude": 51.183, "longitude": -114.458 }
+    ]
+  },
+  {
+    "name": "Bow Meadows/Crawford",
+    "priority": 11,
+    "color": "#f9844a",
+    "polygon": [
+      { "latitude": 51.17, "longitude": -114.42 },
+      { "latitude": 51.17, "longitude": -114.393 },
+      { "latitude": 51.186, "longitude": -114.393 },
+      { "latitude": 51.186, "longitude": -114.42 }
+    ]
+  },
+  {
+    "name": "Willows/Rivercrest/Ford",
+    "priority": 12,
+    "color": "#f8961e",
+    "polygon": [
+      { "latitude": 51.168, "longitude": -114.49 },
+      { "latitude": 51.168, "longitude": -114.46 },
+      { "latitude": 51.182, "longitude": -114.46 },
+      { "latitude": 51.182, "longitude": -114.49 }
+    ]
+  },
+  {
+    "name": "Sunterra",
+    "priority": 13,
+    "color": "#f9c74f",
+    "polygon": [
+      { "latitude": 51.175, "longitude": -114.495 },
+      { "latitude": 51.175, "longitude": -114.47 },
+      { "latitude": 51.189, "longitude": -114.47 },
+      { "latitude": 51.189, "longitude": -114.495 }
+    ]
+  },
+  {
+    "name": "West Terrace/Pointe",
+    "priority": 14,
+    "color": "#277da1",
+    "polygon": [
+      { "latitude": 51.185, "longitude": -114.492 },
+      { "latitude": 51.185, "longitude": -114.472 },
+      { "latitude": 51.198, "longitude": -114.472 },
+      { "latitude": 51.198, "longitude": -114.492 }
+    ]
+  },
+  {
+    "name": "Cochrane Heights",
+    "priority": 15,
+    "color": "#5777c2",
+    "polygon": [
+      { "latitude": 51.198, "longitude": -114.475 },
+      { "latitude": 51.198, "longitude": -114.448 },
+      { "latitude": 51.215, "longitude": -114.448 },
+      { "latitude": 51.215, "longitude": -114.475 }
+    ]
+  },
+  {
+    "name": "Riversong/BVHS",
+    "priority": 16,
+    "color": "#4d908e",
+    "polygon": [
+      { "latitude": 51.183, "longitude": -114.508 },
+      { "latitude": 51.183, "longitude": -114.483 },
+      { "latitude": 51.195, "longitude": -114.483 },
+      { "latitude": 51.195, "longitude": -114.508 }
+    ]
+  },
+  {
+    "name": "West Valley/Mitford",
+    "priority": 17,
+    "color": "#90be6d",
+    "polygon": [
+      { "latitude": 51.193, "longitude": -114.498 },
+      { "latitude": 51.193, "longitude": -114.472 },
+      { "latitude": 51.21, "longitude": -114.472 },
+      { "latitude": 51.21, "longitude": -114.498 }
+    ]
+  },
+  {
+    "name": "East End/Industrial",
+    "priority": 18,
+    "color": "#577590",
+    "polygon": [
+      { "latitude": 51.178, "longitude": -114.43 },
+      { "latitude": 51.178, "longitude": -114.4 },
+      { "latitude": 51.198, "longitude": -114.4 },
+      { "latitude": 51.198, "longitude": -114.43 }
+    ]
+  },
+  {
+    "name": "Bow Ridge/Jumping Pound",
+    "priority": 19,
+    "color": "#264653",
+    "polygon": [
+      { "latitude": 51.19, "longitude": -114.51 },
+      { "latitude": 51.19, "longitude": -114.47 },
+      { "latitude": 51.22, "longitude": -114.47 },
+      { "latitude": 51.22, "longitude": -114.51 }
+    ]
+  },
+  {
+    "name": "Downtown/Quarry",
+    "priority": 20,
+    "color": "#f4a261",
+    "polygon": [
+      { "latitude": 51.183, "longitude": -114.478 },
+      { "latitude": 51.183, "longitude": -114.45 },
+      { "latitude": 51.2, "longitude": -114.45 },
+      { "latitude": 51.2, "longitude": -114.478 }
+    ]
+  },
+  {
+    "name": "Spring Hill RV/Cook Rd",
+    "priority": 21,
+    "color": "#7b2cbf",
+    "polygon": [
+      { "latitude": 51.222, "longitude": -114.44 },
+      { "latitude": 51.222, "longitude": -114.41 },
+      { "latitude": 51.242, "longitude": -114.41 },
+      { "latitude": 51.242, "longitude": -114.44 }
+    ]
+  },
+  {
+    "name": "Seminary/Interpipeline",
+    "priority": 22,
+    "color": "#073b4c",
+    "polygon": [
+      { "latitude": 51.193, "longitude": -114.53 },
+      { "latitude": 51.193, "longitude": -114.505 },
+      { "latitude": 51.21, "longitude": -114.505 },
+      { "latitude": 51.21, "longitude": -114.53 }
+    ]
+  },
+  {
+    "name": "Monterra/Coch Lk/Camden",
+    "priority": 23,
+    "color": "#386641",
+    "polygon": [
+      { "latitude": 51.153, "longitude": -114.545 },
+      { "latitude": 51.153, "longitude": -114.51 },
+      { "latitude": 51.175, "longitude": -114.51 },
+      { "latitude": 51.175, "longitude": -114.545 }
+    ]
+  }
+]
