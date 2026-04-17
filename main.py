@@ -1,27 +1,25 @@
 # -----------------------------------------------------------
 # - TAXI4U API
-# - First FastAPI entry point
+# - FastAPI entry point with address geocoding + routing support
 # -----------------------------------------------------------
 
 from fastapi import FastAPI
+from pydantic import BaseModel
+
 from calculator import (
     calculate_distance_fare,
     calculate_fare,
     prepare_trip_data,
     validate_trip_data,
 )
-from pydantic import BaseModel
-# -----------------------------------------------------------
-# Imports
-# Fare request model + zone detection
-# -----------------------------------------------------------
-from pydantic import BaseModel
-from zone_mapper import detect_zone, detect_possible_zones
-
-
+from geocoder import geocode_address
+from routing import get_route
+from zone_mapper import detect_zone, detect_possible_zones, detect_zone_by_coords
 
 
 app = FastAPI(title="TAXI4U Fare API")
+
+DISTANCE_FALLBACK_KM = 10
 
 
 # -----------------------------------------------------------
@@ -69,21 +67,10 @@ def fare_test():
         "fare": result,
     }
 
-# -----------------------------------------------------------
-# Fare Request Model
-# Accept pickup and dropoff text from user
-# -----------------------------------------------------------
-
-
-class FareRequest(BaseModel):
-    pickup: str
-    dropoff: str
-
-
 
 # -----------------------------------------------------------
-# Fare Request Model
-# Accept pickup and dropoff text from user
+# - Fare Request Model
+# - Accept pickup and dropoff address strings
 # -----------------------------------------------------------
 class FareRequest(BaseModel):
     pickup: str
@@ -92,15 +79,33 @@ class FareRequest(BaseModel):
 
 # -----------------------------------------------------------
 # POST /fare/calculate
-# Step 3: Prepare + validate only
+# Geocodes addresses, routes, detects zones, applies fare logic
 # -----------------------------------------------------------
 @app.post("/fare/calculate")
 def calculate_fare_endpoint(request: FareRequest):
-    pickup_zone = detect_zone(request.pickup)
-    dropoff_zone = detect_zone(request.dropoff)
+    # --- Geocode both addresses ---
+    pickup_coords = geocode_address(request.pickup)
+    dropoff_coords = geocode_address(request.dropoff)
 
-    pickup_options = detect_possible_zones(request.pickup)
-    dropoff_options = detect_possible_zones(request.dropoff)
+    # --- Get real route distance/duration (always, for driver convenience) ---
+    route = None
+    if pickup_coords and dropoff_coords:
+        route = get_route(pickup_coords, dropoff_coords)
+
+    # --- Zone detection: coords → geocoded display_name → raw text ---
+    def resolve_zone(coords, raw_text):
+        detection_text = coords["display_name"] if coords else raw_text
+        if coords:
+            coord_zone = detect_zone_by_coords(coords["lat"], coords["lon"])
+            if coord_zone:
+                return coord_zone, [coord_zone], "coords", detection_text
+            source = "geocoded"
+        else:
+            source = "raw"
+        return detect_zone(detection_text), detect_possible_zones(detection_text), source, detection_text
+
+    pickup_zone, pickup_options, pickup_detection_source, pickup_detection_text = resolve_zone(pickup_coords, request.pickup)
+    dropoff_zone, dropoff_options, dropoff_detection_source, dropoff_detection_text = resolve_zone(dropoff_coords, request.dropoff)
 
     pickup_invalid = pickup_zone in (None, "Unknown Zone") or len(pickup_options) == 0
     dropoff_invalid = dropoff_zone in (None, "Unknown Zone") or len(dropoff_options) == 0
@@ -123,27 +128,10 @@ def calculate_fare_endpoint(request: FareRequest):
 
     validation = validate_trip_data(trip_data)
 
-    if validation_status == "valid" and validation["valid"]:
-        return {
-            "pickup_text": request.pickup,
-            "dropoff_text": request.dropoff,
-            "pickup_zone": pickup_zone,
-            "dropoff_zone": dropoff_zone,
-            "validation_status": "valid",
-            "pickup_possible_zones": pickup_options,
-            "dropoff_possible_zones": dropoff_options,
-            "fare_type": "zone",
-            "trip_data": trip_data,
-            "validation": validation,
-            "fare": calculate_fare(
-                pickup_zone=trip_data["pickup_zone"],
-                dropoff_zone=trip_data["dropoff_zone"],
-                extra_stops=trip_data["extra_stops"],
-                wait_minutes=trip_data["wait_minutes"],
-            ),
-        }
+    _confidence = {"coords": "high", "geocoded": "medium", "raw": "low"}
 
-    return {
+    # --- Base response fields shared by both fare types ---
+    base = {
         "pickup_text": request.pickup,
         "dropoff_text": request.dropoff,
         "pickup_zone": pickup_zone,
@@ -151,12 +139,46 @@ def calculate_fare_endpoint(request: FareRequest):
         "validation_status": validation_status,
         "pickup_possible_zones": pickup_options,
         "dropoff_possible_zones": dropoff_options,
+        "pickup_coords": pickup_coords,
+        "dropoff_coords": dropoff_coords,
+        "pickup_detection_source": pickup_detection_source,
+        "dropoff_detection_source": dropoff_detection_source,
+        "pickup_detection_text": pickup_detection_text,
+        "dropoff_detection_text": dropoff_detection_text,
+        "pickup_detection_confidence": _confidence[pickup_detection_source],
+        "dropoff_detection_confidence": _confidence[dropoff_detection_source],
+        "route": route,
+        "trip_data": trip_data,
+        "validation": validation,
+    }
+
+    # --- Business rule: zone fare if both zones resolve in chart ---
+    zone_fare = calculate_fare(
+        pickup_zone=trip_data["pickup_zone"],
+        dropoff_zone=trip_data["dropoff_zone"],
+        extra_stops=trip_data["extra_stops"],
+        wait_minutes=trip_data["wait_minutes"],
+    )
+
+    if validation_status == "valid" and validation["valid"] and isinstance(zone_fare, dict):
+        return {
+            **base,
+            "fare_type": "zone",
+            "fare": zone_fare,
+        }
+
+    # --- Distance fallback: use real route distance, or hardcoded fallback ---
+    distance_km = route["distance_km"] if route else DISTANCE_FALLBACK_KM
+
+    fallback_trip_data = {**trip_data, "distance_km": distance_km}
+
+    return {
+        **base,
+        "trip_data": fallback_trip_data,
         "pickup_options": pickup_options if pickup_ambiguous else [],
         "dropoff_options": dropoff_options if dropoff_ambiguous else [],
         "error": "Zone not recognized" if pickup_invalid or dropoff_invalid else None,
         "message": "Multiple possible zones detected" if pickup_ambiguous or dropoff_ambiguous else None,
         "fare_type": "distance",
-        "trip_data": trip_data,
-        "validation": validation,
-        "fare": calculate_distance_fare(trip_data["distance_km"]),
+        "fare": calculate_distance_fare(distance_km),
     }

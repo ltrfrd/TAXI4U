@@ -61,17 +61,22 @@ def prepare_trip_data(
     wait_minutes=0,
     pickup_matches=None,
     dropoff_matches=None,
+    distance_km=None,
 ):
-    return {
+    trip_data = {
         "pickup_zone": pickup_zone,
         "dropoff_zone": dropoff_zone,
         "pickup_matches": pickup_matches or [],
         "dropoff_matches": dropoff_matches or [],
-        "distance_km": 10,
         "extra_stops": extra_stops,
         "wait_minutes": wait_minutes,
         "ready_for_confirmation": True,
     }
+
+    if distance_km is not None:
+        trip_data["distance_km"] = distance_km
+
+    return trip_data
 # -----------------------------------------------------------
 # - Validate trip data
 # - Ensure required values exist before confirmation
@@ -92,10 +97,22 @@ def validate_trip_data(trip_data):
             "message": "Pickup zone is required",
         }
 
+    if trip_data["pickup_zone"] == "Unknown Zone":
+        return {
+            "valid": False,
+            "message": "Pickup zone is invalid",
+        }
+
     if not trip_data["dropoff_zone"]:
         return {
             "valid": False,
             "message": "Drop-off zone is required",
+        }
+
+    if trip_data["dropoff_zone"] == "Unknown Zone":
+        return {
+            "valid": False,
+            "message": "Drop-off zone is invalid",
         }
 
     if trip_data["extra_stops"] < 0:
@@ -125,45 +142,3 @@ def confirm_and_calculate(trip_data):
         extra_stops=trip_data["extra_stops"],
         wait_minutes=trip_data["wait_minutes"],
     )
-
-# -----------------------------------------------------------
-# - Simulated app flow
-# - App provides raw text, mapper converts it to zones
-# -----------------------------------------------------------
-pickup_text = "Pickup from downtown"
-dropoff_text = "Going to Glenbow"
-
-pickup_matches = detect_possible_zones(pickup_text)
-dropoff_matches = detect_possible_zones(dropoff_text)
-
-pickup_zone = detect_zone(pickup_text)
-dropoff_zone = detect_zone(dropoff_text)
-
-print("Pickup possible zones:", pickup_matches)
-print("Drop-off possible zones:", dropoff_matches)
-
-trip = prepare_trip_data(
-    pickup_zone=pickup_zone,
-    dropoff_zone=dropoff_zone,
-    pickup_matches=pickup_matches,
-    dropoff_matches=dropoff_matches,
-    extra_stops=1,
-    wait_minutes=6,
-)
-
-validation = validate_trip_data(trip)
-
-if pickup_zone == "Unknown Zone" or dropoff_zone == "Unknown Zone":
-    print("Zone detection failed. Driver confirmation or correction is required.")
-elif not validation["valid"]:
-    print(validation["message"])
-else:
-    print("Trip ready for confirmation:")
-    print(trip)
-
-    # Simulate driver confirmation
-    result = confirm_and_calculate(trip)
-
-    print("\nFinal Fare:")
-    print(type(result), result)
-    print(result)
