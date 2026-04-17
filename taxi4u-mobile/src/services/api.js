@@ -36,3 +36,39 @@ export async function fetchZones() {
   const payload = await response.json();
   return payload.zones ?? [];
 }
+
+// -------------------------------------------------------------------
+// Nominatim address autocomplete — Canada only, no backend needed
+// -------------------------------------------------------------------
+const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
+
+function _formatLabel(r) {
+  const a = r.address || {};
+  const street = [a.house_number, a.road].filter(Boolean).join(' ');
+  const place = r.name || street || a.suburb || a.neighbourhood || '';
+  const city = a.city || a.town || a.village || a.municipality || a.county || '';
+  const province = a.state || '';
+  return [place, city, province].filter(Boolean).join(', ') || r.display_name;
+}
+
+export async function searchAddresses(query) {
+  const q = (query || '').trim();
+  if (q.length < 2) return [];
+  try {
+    const params = new URLSearchParams({
+      q,
+      format: 'json',
+      addressdetails: '1',
+      limit: '5',
+      countrycodes: 'ca',
+    });
+    const res = await fetch(`${NOMINATIM}?${params}`, {
+      headers: { 'User-Agent': 'TAXI4U-MobileApp/1.0' },
+    });
+    if (!res.ok) return [];
+    const hits = await res.json();
+    return hits.map(r => ({ label: _formatLabel(r), value: r.display_name }));
+  } catch {
+    return [];
+  }
+}
