@@ -155,6 +155,24 @@ export async function createRide(token, payload) {
   return response.json();
 }
 
+export async function getMyLatestRide(token) {
+  const response = await authFetch(`${API_BASE}/rides/me/latest`, token);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Failed to load latest ride (${response.status})`);
+  }
+  return response.json();
+}
+
+export async function getRideById(token, rideId) {
+  const response = await authFetch(`${API_BASE}/rides/${rideId}`, token);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Failed to refresh ride (${response.status})`);
+  }
+  return response.json();
+}
+
 // -------------------------------------------------------------------
 // Nominatim address autocomplete — Canada only, no backend needed
 // -------------------------------------------------------------------

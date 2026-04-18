@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
-import { createRide } from '../services/api';
+import { createRide, getRideById } from '../services/api';
 
 export default function ResultScreen({ navigation, route }) {
   const { token } = useAuth();
@@ -19,6 +19,8 @@ export default function ResultScreen({ navigation, route }) {
   const [booking, setBooking] = useState(false);
   const [bookingError, setBookingError] = useState(null);
   const [bookedRide, setBookedRide] = useState(existingRide);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState(null);
 
   async function handleBook() {
     setBooking(true);
@@ -38,6 +40,20 @@ export default function ResultScreen({ navigation, route }) {
       setBookingError(err.message || 'Booking failed.');
     } finally {
       setBooking(false);
+    }
+  }
+
+  async function handleRefresh() {
+    if (!bookedRide?.id) return;
+    setRefreshing(true);
+    setRefreshError(null);
+    try {
+      const fresh = await getRideById(token, bookedRide.id);
+      setBookedRide(fresh);
+    } catch (err) {
+      setRefreshError(err.message || 'Refresh failed.');
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -106,6 +122,15 @@ export default function ResultScreen({ navigation, route }) {
                 : null}
             </>
           ) : null}
+          <TouchableOpacity
+            style={[styles.refreshBtn, refreshing && { opacity: 0.5 }]}
+            onPress={handleRefresh}
+            disabled={refreshing}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.refreshBtnText}>{refreshing ? 'Refreshing…' : 'Refresh Status'}</Text>
+          </TouchableOpacity>
+          {refreshError ? <Text style={styles.refreshError}>{refreshError}</Text> : null}
         </View>
       ) : (
         <>
@@ -282,5 +307,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 8,
+  },
+  refreshBtn: {
+    alignSelf: 'flex-end',
+    marginTop: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#f5c518',
+  },
+  refreshBtnText: {
+    color: '#f5c518',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  refreshError: {
+    color: '#ff6b6b',
+    fontSize: 12,
+    marginTop: 6,
+    textAlign: 'right',
   },
 });
