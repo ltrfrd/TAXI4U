@@ -1,6 +1,6 @@
 # TAXI4U
 
-A fare calculation system for taxi dispatch in Cochrane, AB. A FastAPI backend accepts address input or GPS coordinates, geocodes them (Canada-only), fetches live driving distance, and returns a fare based on zone pricing or a per-km distance fallback. A React Native / Expo mobile app provides autocomplete address input, fare display, and a live driver map with real-time zone detection.
+A fare calculation system for taxi dispatch in Cochrane, AB. A FastAPI backend accepts address input or GPS coordinates, geocodes when needed, fetches live driving distance, and returns a fare based on zone pricing or a per-km distance fallback. A React Native / Expo mobile app provides autocomplete address input, fare display, and a live driver map with real-time zone detection.
 
 ---
 
@@ -8,49 +8,48 @@ A fare calculation system for taxi dispatch in Cochrane, AB. A FastAPI backend a
 
 ```
 Mobile App (Expo / React Native)
-    │
-    ├── HomeScreen
-    │     Autocomplete → Nominatim (Canada-only, direct from app)
-    │     Tapped suggestion stores lat/lon in selection state
-    │     "Calculate Fare" sends pickup + dropoff text
-    │     + optional pickup_coords / dropoff_coords if a suggestion was selected
-    │
-    ├── ResultScreen
-    │     Displays fare, zones, route info
-    │     "Open Live Map" button
-    │
-    └── MapScreen
+    |
+    |-- HomeScreen
+    |     Autocomplete -> Nominatim (Canada-only, direct from app)
+    |     Tapped suggestion stores lat/lon in selection state
+    |     "Calculate Fare" sends pickup + dropoff text
+    |     + optional pickup_coords / dropoff_coords if a suggestion was selected
+    |
+    |-- ResultScreen
+    |     Displays fare, zones, route info
+    |     "Open Live Map" button
+    |
+    `-- MapScreen
           Fetches zone polygons from backend /zones
           Live GPS tracking via expo-location
           Point-in-polygon detection runs on-device
           Shows pickup/dropoff markers + driver marker
-    │
-    ▼
+
 Backend (FastAPI)
-    │
-    ├── Input Validation
-    │     Reject empty, all-punctuation, single-character inputs early
-    │
-    ├── Coordinate Passthrough
-    │     If pickup_coords / dropoff_coords are provided → skip geocoding
-    │     Use provided lat/lon directly (high-confidence path)
-    │
-    ├── Geocoding — Nominatim (OpenStreetMap)
-    │     Only runs if no coordinates were provided
-    │     Canada-only (countrycodes=ca)
-    │     Cochrane-anchored for local/ambiguous inputs
-    │
-    ├── Routing — OSRM
-    │     Real driving distance (km) and duration (min) between the two points
-    │
-    ├── Zone Detection
-    │     1. Coordinate → polygon boundary check (zones.json, high confidence)
-    │     2. Geocoded display_name → keyword match (medium confidence)
-    │     3. Raw input text → keyword match (low confidence, geocoding failed)
-    │
-    └── Fare Decision
-          Both zones in fare chart  →  zone fare  (fares.json matrix lookup)
-          Either zone not in chart  →  distance fare  ($2 × route km)
+    |
+    |-- Input Validation
+    |     Reject empty, all-punctuation, single-character inputs early
+    |
+    |-- Coordinate Passthrough
+    |     If pickup_coords / dropoff_coords are provided -> skip geocoding
+    |     Use provided lat/lon directly
+    |
+    |-- Geocoding - Nominatim (OpenStreetMap)
+    |     Only runs if no coordinates were provided
+    |     Canada-only (countrycodes=ca)
+    |     Cochrane-anchored for local/ambiguous inputs
+    |
+    |-- Routing - OSRM
+    |     Real driving distance (km) and duration (min) between the two points
+    |
+    |-- Zone Detection
+    |     1. Coordinate -> polygon boundary check (zones.json, high confidence)
+    |     2. Geocoded display_name -> keyword match (medium confidence)
+    |     3. Raw input text -> keyword match (low confidence, geocoding failed)
+    |
+    `-- Fare Decision
+          Both zones in fare chart  -> zone fare     (fares.json matrix lookup)
+          Either zone not in chart  -> distance fare ($2 x route km)
 ```
 
 ---
@@ -59,104 +58,100 @@ Backend (FastAPI)
 
 ### Zone Fare
 
-`fares.json` is the single source of truth for chart-based pricing. When both pickup and dropoff resolve to named zones in the chart, the fare is read directly from the matrix — no calculation needed.
+`fares.json` is the single source of truth for chart-based pricing. When both pickup and dropoff resolve to named zones in the chart, the fare is read directly from the matrix.
 
 - Extra stop fee: **$4.00 per stop**
 - Waiting fee: **$0.50 / min** after the first 4 free minutes
-- `Airports (All)` is a regular named zone — no special override
+- `Airports (All)` is a regular named zone with no special override
 
 ### Distance Fare (Fallback)
 
 Used when either location cannot be matched to a zone in the fare chart:
 
+```text
+fare = route_distance_km x $2.00
 ```
-fare = route_distance_km × $2.00
-```
 
-The real OSRM route distance is used when available. If routing also fails, a 10 km hardcoded fallback is applied.
+The real OSRM route distance is used when available. If routing fails, a 10 km fallback is applied.
 
-### Route Info (Always Returned)
+### Route Info
 
-`route.distance_km` and `route.duration_minutes` are included in every response when available, regardless of fare type, so the driver always has navigation context.
+`route.distance_km` and `route.duration_minutes` are returned when routing succeeds. A top-level `distance` field is always returned: it is `route.distance_km` when available, otherwise the fallback distance used for pricing.
 
 ---
 
 ## Geocoding Behavior
 
-The geocoder (`geocoder.py`) enforces Canada-only results via Nominatim's `countrycodes=ca` parameter on every request. No results outside Canada are ever accepted.
+The geocoder (`geocoder.py`) enforces Canada-only results via Nominatim `countrycodes=ca`.
 
-For inputs that lack a recognizable geographic anchor word (`cochrane`, `alberta`, `calgary`, `yyc`, etc.), three progressively broader queries are tried in order:
+For inputs without a recognizable geographic anchor word (`cochrane`, `alberta`, `calgary`, `yyc`, etc.), three progressively broader queries are tried:
 
-| Step | Query sent to Nominatim |
+| Step | Query |
 |---|---|
-| 1 | `"{input}, Cochrane, Alberta, Canada"` — best for local streets and areas |
-| 2 | `"{input}, Alberta, Canada"` — catches airports and POIs not in Cochrane |
-| 3 | `"{input}"` (bare, still Canada-only) — resolves any valid Canadian city |
+| 1 | `"{input}, Cochrane, Alberta, Canada"` |
+| 2 | `"{input}, Alberta, Canada"` |
+| 3 | `"{input}"` (still Canada-only) |
 
-If the input already contains an anchor word, the query is used as-is (no anchor appended).
-
-**Input normalization:** leading/trailing spaces are stripped, repeated whitespace is collapsed, and inputs shorter than 2 non-space characters are rejected before any geocoding attempt.
-
-**Examples that work correctly:**
-
-| Input | Path | Resolves to |
-|---|---|---|
-| `"downtown cochrane"` | Has anchor → used as-is | Cochrane downtown |
-| `"DOWNTOWN COCHRANE"` | Has anchor → used as-is | Cochrane downtown |
-| `"123 riverview dr"` | Step 1 anchored | Street in Cochrane |
-| `"airport"` | Step 1 empty → Step 2 | Calgary International |
-| `"yyc"` | Has anchor → used as-is | YYC airport |
-| `"toronto"` | Step 1 → 2 empty → Step 3 bare | Toronto, ON |
-| `"vancouver"` | Step 1 → 2 empty → Step 3 bare | Vancouver, BC |
+If the input already contains an anchor word, the query is used as-is.
 
 ---
 
 ## Mobile Autocomplete
 
-Address suggestions are fetched directly from Nominatim inside the mobile app — no backend involvement. Suggestions appear 400 ms after the user stops typing (debounced), restricted to Canada (`countrycodes=ca`), limited to 5 results.
+Address suggestions are fetched directly from Nominatim inside the mobile app. Suggestions are debounced by 400 ms, restricted to Canada, and limited to 5 results.
 
-Each suggestion stores the resolved `lat` and `lon` alongside its display label. When the user taps a suggestion:
+Each suggestion stores:
 
-1. The input field is filled with a readable label (`"Place, City, Province"`)
-2. The lat/lon are saved in selection state
-3. On "Calculate Fare", those coordinates are sent to the backend as `pickup_coords`/`dropoff_coords`
-4. The backend skips geocoding entirely for that address — coordinates are used directly
+- a readable label
+- `lat`
+- `lon`
+- `display_name`
 
-Manual typing without selecting a suggestion still works. In that case no coordinates are sent and the backend geocodes the text string.
+When the user taps a suggestion:
+
+1. The input field is filled with the readable label.
+2. The lat/lon are saved in selection state.
+3. On "Calculate Fare", those coordinates are sent as `pickup_coords` / `dropoff_coords`.
+4. The backend skips geocoding for that field and uses the supplied coordinates directly.
+
+Manual typing without selecting a suggestion still works. If the user edits the text after selecting a suggestion, the saved coordinates are cleared and the backend falls back to the normal text geocoding path.
 
 ---
 
 ## Live Map
 
-After a fare is calculated, the driver can open a live zone map from the ResultScreen.
+After a fare is calculated, the driver can open a live zone map from the Result screen.
 
-**Zone polygons** — MapScreen fetches all zone definitions from the backend `GET /zones` endpoint on load. Each zone is drawn as a colored polygon using `react-native-maps`. The active zone (the one containing the driver's current position) is highlighted with a brighter stroke and fill.
+- `MapScreen` fetches zone definitions from `GET /zones`
+- `react-native-maps` renders the polygons
+- `expo-location` tracks foreground location updates
+- point-in-polygon detection runs on-device
+- pickup, dropoff, and driver markers are displayed together
 
-**Driver location** — `expo-location` requests foreground location permission and begins watching GPS position with a 10-metre distance interval and 3-second minimum time interval. The driver's current position is shown as a gold marker on the map.
+Background location is not implemented. `taxi4u-mobile/src/services/backgroundLocation.js` is only a stub, and `taxi4u-mobile/app.json` explicitly keeps background location disabled with:
 
-**Zone switching** — On every GPS update, `findZoneForCoordinates()` runs a point-in-polygon ray-casting check on-device against the loaded polygon set. When the driver crosses into a different zone the previous zone name and timestamp are recorded and displayed in the info card at the bottom of the screen.
-
-**Pickup and dropoff markers** — The coordinates from the fare result are shown as green (pickup) and red (dropoff) markers. The map auto-fits to include both when the screen opens.
-
-Zone detection on the map is fully on-device — no additional network calls are made after the initial zone polygon fetch.
+- `isAndroidBackgroundLocationEnabled: false`
+- `isIosBackgroundLocationEnabled: false`
 
 ---
 
 ## Zone Detection
 
-Zone detection runs in three tiers, from highest to lowest confidence:
+Zone detection runs in three tiers:
 
 | Source | Method | Confidence |
 |---|---|---|
-| `coords` | GPS coordinates checked against polygon boundaries (zones.json) | High |
+| `coords` | GPS coordinates checked against polygon boundaries | High |
 | `geocoded` | Nominatim `display_name` matched against keyword patterns | Medium |
 | `raw` | Raw user input matched against keyword patterns | Low |
 
-**Polygon zones (coordinate detection):** 23 zones defined in `backend/data/zones.json`, each with a polygon boundary, priority, and color. Coordinate-based detection uses a bounding-box pre-check with a small inward buffer, evaluated in priority order so smaller specific zones win when boundaries overlap.
+Overall response confidence is:
 
-**Keyword zones (text detection):** 14 zones have keyword patterns defined in `zone_mapper.py`. The remaining 9 polygon zones (Fireside Business Area, H.Land/Heritage, Willows/Rivercrest, Bow Meadows, Bow Ridge, Spring Hill, Seminary, Monterra, Sunset On/Past) are detectable only by coordinate match, not by text keyword.
+- `high` if both pickup and dropoff detection sources are `coords`
+- `medium` if at least one side is `geocoded` and neither side is `raw`
+- `low` otherwise
 
-**Fare-only zones:** 4 zones exist in `fares.json` but have no polygon (Airports All, GE variants, LRT Crowfoot/Tuscany). These are matched by keyword only.
+Polygon zone definitions live in `backend/data/zones.json`. Coordinate-based detection uses a bounding-box pre-check with a small inward buffer, evaluated in priority order so smaller specific zones win when zones overlap.
 
 ---
 
@@ -170,30 +165,27 @@ Health check.
 { "message": "TAXI4U Fare API is running" }
 ```
 
----
-
 ### `GET /zones`
 
-Returns all zone definitions. Used by the mobile map screen to draw polygons and run on-device zone detection.
+Returns all zone definitions for the mobile map.
 
 ```json
 {
   "zones": [
     {
       "name": "Downtown/Quarry",
-      "priority": 1,
-      "color": "#e74c3c",
+      "priority": 20,
+      "color": "#f4a261",
       "polygon": [
-        { "latitude": 51.192, "longitude": -114.472 },
-        ...
+        { "latitude": 51.183, "longitude": -114.478 },
+        { "latitude": 51.183, "longitude": -114.45 },
+        { "latitude": 51.2, "longitude": -114.45 },
+        { "latitude": 51.2, "longitude": -114.478 }
       ]
-    },
-    ...
+    }
   ]
 }
 ```
-
----
 
 ### `POST /fare/calculate`
 
@@ -212,17 +204,15 @@ Calculate a fare from two location inputs.
   },
   "dropoff_coords": {
     "lat": 51.1803,
-    "lon": -114.4650,
+    "lon": -114.465,
     "display_name": "Rivercrest Boulevard, Rivercrest, Cochrane, Alberta, Canada"
   }
 }
 ```
 
-`pickup_coords` and `dropoff_coords` are **optional**. When provided, geocoding is skipped for that address and the supplied coordinates are used directly. This is the high-confidence path used when the driver selects an autocomplete suggestion in the app.
+`pickup_coords` and `dropoff_coords` are optional. When provided, geocoding is skipped for that field.
 
-When omitted, the backend geocodes the address string as normal.
-
-**Response (zone fare)**
+**Response (zone fare example)**
 
 ```json
 {
@@ -240,7 +230,7 @@ When omitted, the backend geocodes the address string as normal.
   },
   "dropoff_coords": {
     "lat": 51.1803,
-    "lon": -114.4650,
+    "lon": -114.465,
     "display_name": "Rivercrest Boulevard, Rivercrest, Cochrane, Alberta, Canada"
   },
   "pickup_detection_source": "coords",
@@ -251,7 +241,10 @@ When omitted, the backend geocodes the address string as normal.
     "distance_km": 3.8,
     "duration_minutes": 6.2
   },
+  "distance": 3.8,
+  "confidence": "high",
   "fare_type": "zone",
+  "method_used": "zone",
   "fare": {
     "pickup_zone": "Fireside (Residential)",
     "dropoff_zone": "Willows/Rivercrest/Ford",
@@ -263,24 +256,19 @@ When omitted, the backend geocodes the address string as normal.
 }
 ```
 
-**Early validation error (bad input)**
-
-If either address string is empty, all punctuation, or too short, the endpoint returns immediately before geocoding:
+**Early validation error**
 
 ```json
 {
   "ok": false,
   "error": "Please enter a location.",
   "pickup_error": "Please enter a location.",
-  "dropoff_error": null
+  "dropoff_error": null,
+  "distance": null,
+  "confidence": "low",
+  "method_used": null
 }
 ```
-
----
-
-### `GET /fare/test`
-
-Fixed test trip using hardcoded zone names. Useful for verifying the fare engine and `fares.json` are working without any geocoding or routing dependency.
 
 ---
 
@@ -289,52 +277,53 @@ Fixed test trip using hardcoded zone names. Useful for verifying the fare engine
 | Field | Description |
 |---|---|
 | `pickup_text` / `dropoff_text` | Original address strings from the request |
-| `pickup_coords` / `dropoff_coords` | `{lat, lon, display_name}` — either passed in or from Nominatim; `null` if geocoding failed |
-| `pickup_detection_source` / `dropoff_detection_source` | `"coords"` — polygon match on supplied or geocoded coordinates; `"geocoded"` — keyword match on Nominatim display_name; `"raw"` — keyword match on raw input text |
-| `pickup_detection_confidence` / `dropoff_detection_confidence` | `"high"` (coords), `"medium"` (geocoded), `"low"` (raw) |
-| `pickup_zone` / `dropoff_zone` | Detected zone name, or `"Unknown Zone"` |
+| `pickup_coords` / `dropoff_coords` | `{lat, lon, display_name}` either passed in or from Nominatim; `null` if geocoding failed |
+| `pickup_detection_source` / `dropoff_detection_source` | `coords`, `geocoded`, or `raw` |
+| `pickup_detection_confidence` / `dropoff_detection_confidence` | Per-side confidence values derived from the detection source |
+| `distance` | Top-level distance value: route distance when available, otherwise fallback distance used for fare calculation |
+| `confidence` | Overall confidence: `high`, `medium`, or `low` |
+| `pickup_zone` / `dropoff_zone` | Detected zone name or `Unknown Zone` |
 | `pickup_possible_zones` / `dropoff_possible_zones` | All zones matched from the detection text |
-| `validation_status` | `"valid"`, `"ambiguous"` (multiple zone matches), or `"invalid"` |
+| `validation_status` | `valid`, `ambiguous`, or `invalid` |
 | `route` | `{distance_km, duration_minutes}` from OSRM, or `null` if routing failed |
-| `fare_type` | `"zone"` if both zones are in the fare chart, `"distance"` otherwise |
-| `fare` | Fare breakdown — structure varies by `fare_type` (see zone fare vs distance fare shapes above) |
+| `fare_type` | `zone` if both zones are in the chart, otherwise `distance` |
+| `method_used` | Top-level fare method marker: `zone` or `distance`; `null` on early validation errors |
+| `fare` | Fare breakdown; structure varies by `fare_type` |
 
 ---
 
 ## File Structure
 
-```
+```text
 TAXI4U/
-├── main.py                        # FastAPI app — /fare/calculate, /zones endpoints
-├── calculator.py                  # Zone fare + distance fare calculation
-├── config.py                      # External service URLs (Nominatim, OSRM) — edit to swap providers
-├── zone_mapper.py                 # Keyword + coordinate-based zone detection
-├── geocoder.py                    # Nominatim geocoding (Canada-only, Cochrane-anchored)
-├── routing.py                     # OSRM driving distance/duration
-├── fares.json                     # Zone fare matrix — 27 zones (source of truth for pricing)
+├── main.py
+├── calculator.py
+├── zone_mapper.py
+├── geocoder.py
+├── routing.py
+├── fares.json
 ├── backend/
 │   └── data/
-│       └── zones.json             # Zone polygons, priorities, colors — 23 zones
-│                                  # (source of truth for map rendering + coord detection)
+│       └── zones.json
 └── taxi4u-mobile/
-    ├── App.js                     # Entry point — mounts AppNavigator
-    ├── app.json                   # Expo config (permissions, splash, plugins)
-    ├── package.json               # Dependencies (Expo 54, react-navigation, maps, location)
+    ├── App.js
+    ├── app.json
+    ├── package.json
     └── src/
-        ├── config.js              # API_BASE — update to local machine IP before running
+        ├── config.js
         ├── navigation/
-        │   └── AppNavigator.js    # Stack navigator: Home → Result → Map
+        │   └── AppNavigator.js
         ├── screens/
-        │   ├── HomeScreen.js      # Address input with autocomplete + fare request
-        │   ├── ResultScreen.js    # Fare display + route info + Open Live Map
-        │   └── MapScreen.js       # Live zone map with GPS driver tracking
+        │   ├── HomeScreen.js
+        │   ├── ResultScreen.js
+        │   └── MapScreen.js
         ├── services/
-        │   ├── api.js             # calculateFare, fetchZones, searchAddresses (AbortSignal support)
-        │   └── backgroundLocation.js  # Stub — background GPS tracking (not yet implemented)
+        │   ├── api.js
+        │   └── backgroundLocation.js
         ├── data/
-        │   └── zones.js           # Thin wrapper: fetchZones from API → sorted, normalized
+        │   └── zones.js
         └── utils/
-            └── zoneDetection.js   # Point-in-polygon (ray casting) — runs on-device
+            └── zoneDetection.js
 ```
 
 ---
@@ -347,10 +336,10 @@ TAXI4U/
 |---|---|
 | API framework | FastAPI |
 | ASGI server | Uvicorn |
-| Geocoding | Nominatim (OpenStreetMap) |
+| Geocoding | Nominatim |
 | Routing | OSRM public API |
-| Zone data | `backend/data/zones.json` (polygons) |
-| Fare data | `fares.json` (matrix) |
+| Zone data | `backend/data/zones.json` |
+| Fare data | `fares.json` |
 
 ### Mobile
 
@@ -368,28 +357,17 @@ TAXI4U/
 
 ### Backend
 
-**Requirements:** Python 3.11+, FastAPI, Uvicorn, Requests
-
 ```bash
 cd TAXI4U
 python -m venv venv
-venv\Scripts\activate        # Windows
-# source venv/bin/activate   # Mac / Linux
+venv\Scripts\activate
 pip install fastapi uvicorn requests
 python -m uvicorn main:app --reload --host 0.0.0.0 --port 8001
 ```
 
-Interactive API docs (Swagger UI): `http://127.0.0.1:8001/docs`
+The backend reads both `fares.json` and `backend/data/zones.json` via file-based absolute paths derived from the Python source files, so those loads do not depend on the current working directory.
 
-`--host 0.0.0.0` is required so the server accepts connections from devices on the same local network (your phone running Expo Go). Without it the server binds to `127.0.0.1` only and the mobile app cannot reach it.
-
-The backend must be run from the `TAXI4U/` root directory — `fares.json` is loaded from a relative path.
-
----
-
-### Mobile App (Expo Go)
-
-**Requirements:** Node.js 18+, Expo Go app installed on your phone
+### Mobile
 
 ```bash
 cd TAXI4U/taxi4u-mobile
@@ -397,27 +375,14 @@ npm install
 npx expo start
 ```
 
-Scan the QR code with Expo Go (Android) or the Camera app (iOS).
-
-**Important:** Update `API_BASE` in `taxi4u-mobile/src/config.js` to your machine's local IP address before running. The default `localhost` does not reach your machine from a physical device or emulator.
-
-```bash
-# Windows — find your IPv4 address
-ipconfig
-
-# Mac / Linux
-ifconfig
-```
-
-Example: `export const API_BASE = 'http://192.168.1.42:8001';`
+Update `API_BASE` in `taxi4u-mobile/src/config.js` to your machine's local IP address before running.
 
 ---
 
 ## Notes and Limitations
 
-- **Nominatim rate limit:** The public Nominatim API enforces 1 request/second and requires a valid `User-Agent`. The backend uses `TAXI4U-FareCalculator/1.0` and the mobile app uses `TAXI4U-MobileApp/1.0`. For production, self-host Nominatim or use a commercial geocoding provider.
-- **OSRM public instance:** `router.project-osrm.org` is a demo server — do not depend on it for production. Self-host OSRM for reliable routing.
-- **Zone keyword coverage:** `ZONE_PATTERNS` has keyword definitions for 14 of 23 polygon zones. The remaining 9 zones (Fireside Business Area, H.Land/Heritage, Willows/Rivercrest/Ford, Bow Meadows, Bow Ridge, Spring Hill, Seminary, Monterra, Sunset On/Past) are detectable only via GPS coordinate matching, not via text keyword. For best zone resolution, encourage autocomplete selection over free-form typing.
-- **Geocoder response caching:** Per-session in-memory cache keyed on the query string. Cache is cleared on server restart.
-- **Distance fare floor:** If both geocoding and routing fail, distance fare is calculated against a hardcoded 10 km fallback. This produces a minimum fare of ~$20 and should be clearly communicated to the driver in a future UI update.
-- **Forward reference in FareRequest:** `pickup_coords`/`dropoff_coords` use a string annotation to forward-reference `FareLocationCoords`. FastAPI resolves this correctly at startup via Pydantic's model rebuild mechanism, but it relies on FastAPI/Pydantic v2 behavior.
+- The public Nominatim API is rate-limited and intended for low-volume use.
+- The public OSRM endpoint is a demo service and not production-grade.
+- Zone keyword coverage is still narrower than polygon coverage, so coordinate-based detection is more reliable than free-form text matching.
+- If geocoding or routing fails, `/fare/calculate` still returns a response and distance fare uses the 10 km fallback when needed.
+- Background location tracking is intentionally not implemented yet.

@@ -75,6 +75,12 @@ def fare_test():
     }
 
 
+class FareLocationCoords(BaseModel):
+    lat: float
+    lon: float
+    display_name: str | None = None
+
+
 # -----------------------------------------------------------
 # - Fare Request Model
 # - Accept pickup and dropoff address strings
@@ -82,14 +88,8 @@ def fare_test():
 class FareRequest(BaseModel):
     pickup: str
     dropoff: str
-    pickup_coords: "FareLocationCoords | None" = None
-    dropoff_coords: "FareLocationCoords | None" = None
-
-
-class FareLocationCoords(BaseModel):
-    lat: float
-    lon: float
-    display_name: str | None = None
+    pickup_coords: FareLocationCoords | None = None
+    dropoff_coords: FareLocationCoords | None = None
 
 
 # -----------------------------------------------------------
@@ -107,21 +107,24 @@ def calculate_fare_endpoint(request: FareRequest):
             "error": pickup_err or dropoff_err,
             "pickup_error": pickup_err,
             "dropoff_error": dropoff_err,
+            "distance": None,
+            "confidence": "low",
+            "method_used": None,
         }
 
     # --- Use provided coords when present; otherwise geocode as before ---
     pickup_coords = provided_or_geocoded_coords(request.pickup_coords, request.pickup)
     if pickup_coords is None:
-        pickup_coords = geocode_address(request.pickup)
+        pickup_coords = safe_geocode_address(request.pickup)
 
     dropoff_coords = provided_or_geocoded_coords(request.dropoff_coords, request.dropoff)
     if dropoff_coords is None:
-        dropoff_coords = geocode_address(request.dropoff)
+        dropoff_coords = safe_geocode_address(request.dropoff)
 
     # --- Get real route distance/duration (always, for driver convenience) ---
     route = None
     if pickup_coords and dropoff_coords:
-        route = get_route(pickup_coords, dropoff_coords)
+        route = safe_get_route(pickup_coords, dropoff_coords)
 
     # --- Zone detection: coords → geocoded display_name → raw text ---
     def resolve_zone(coords, raw_text):
@@ -160,6 +163,11 @@ def calculate_fare_endpoint(request: FareRequest):
     validation = validate_trip_data(trip_data)
 
     _confidence = {"coords": "high", "geocoded": "medium", "raw": "low"}
+    overall_confidence = get_overall_confidence(
+        pickup_detection_source,
+        dropoff_detection_source,
+    )
+    distance = route["distance_km"] if route else DISTANCE_FALLBACK_KM
 
     # --- Base response fields shared by both fare types ---
     base = {
@@ -179,6 +187,8 @@ def calculate_fare_endpoint(request: FareRequest):
         "pickup_detection_confidence": _confidence[pickup_detection_source],
         "dropoff_detection_confidence": _confidence[dropoff_detection_source],
         "route": route,
+        "distance": distance,
+        "confidence": overall_confidence,
         "trip_data": trip_data,
         "validation": validation,
     }
@@ -195,11 +205,12 @@ def calculate_fare_endpoint(request: FareRequest):
         return {
             **base,
             "fare_type": "zone",
+            "method_used": "zone",
             "fare": zone_fare,
         }
 
     # --- Distance fallback: use real route distance, or hardcoded fallback ---
-    distance_km = route["distance_km"] if route else DISTANCE_FALLBACK_KM
+    distance_km = distance
 
     fallback_trip_data = {**trip_data, "distance_km": distance_km}
 
@@ -211,6 +222,7 @@ def calculate_fare_endpoint(request: FareRequest):
         "error": "Zone not recognized" if pickup_invalid or dropoff_invalid else None,
         "message": "Multiple possible zones detected" if pickup_ambiguous or dropoff_ambiguous else None,
         "fare_type": "distance",
+        "method_used": "distance",
         "fare": calculate_distance_fare(distance_km),
     }
 
@@ -224,3 +236,27 @@ def provided_or_geocoded_coords(coords: FareLocationCoords | None, fallback_text
         "lon": coords.lon,
         "display_name": coords.display_name or fallback_text,
     }
+
+
+def safe_geocode_address(address: str) -> dict | None:
+    try:
+        return geocode_address(address)
+    except Exception:
+        return None
+
+
+def safe_get_route(origin: dict, destination: dict) -> dict | None:
+    try:
+        return get_route(origin, destination)
+    except Exception:
+        return None
+
+
+def get_overall_confidence(pickup_source: str, dropoff_source: str) -> str:
+    if pickup_source == "coords" and dropoff_source == "coords":
+        return "high"
+    if "raw" not in {pickup_source, dropoff_source} and (
+        "geocoded" in {pickup_source, dropoff_source}
+    ):
+        return "medium"
+    return "low"
