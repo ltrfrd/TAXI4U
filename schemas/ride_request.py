@@ -14,6 +14,7 @@ class RideRequestCreate(BaseModel):
     dropoff_lat: float | None = None
     dropoff_lon: float | None = None
     fare_amount: float | None = None
+    assignment_mode: Literal["manual", "auto"] = "manual"
 
 
 class AssignRideRequest(BaseModel):

@@ -276,3 +276,50 @@ def test_auto_assign_only_selects_available_among_mixed():
     r = client.post(f"/rides/{ride_id}/auto-assign")
     assert r.status_code == 200
     assert r.json()["assigned_driver"]["email"] == "available_far@t.com"
+
+
+# ── create-time assignment_mode ───────────────────────────────────────────────
+
+def test_create_auto_mode_assigns_nearest_driver():
+    _driver("near@t.com", 51.05, -114.0)
+    _driver("far@t.com",  51.90, -114.0)
+
+    r = client.post("/rides/", json={
+        "pickup_text": "A", "dropoff_text": "B",
+        "pickup_lat": 51.04, "pickup_lon": -114.0,
+        "assignment_mode": "auto",
+    })
+    assert r.status_code == 201
+    body = r.json()
+    assert body["status"] == "assigned"
+    assert body["assigned_driver"]["email"] == "near@t.com"
+    assert body["assigned_at"] is not None
+
+
+def test_create_auto_mode_missing_coords_returns_400():
+    _driver("d@t.com", 51.0, -114.0)
+
+    r = client.post("/rides/", json={
+        "pickup_text": "A", "dropoff_text": "B",
+        "assignment_mode": "auto",
+    })
+    assert r.status_code == 400
+    assert "coordinates" in r.json()["detail"]
+
+
+def test_create_auto_mode_no_drivers_returns_409():
+    r = client.post("/rides/", json={
+        "pickup_text": "A", "dropoff_text": "B",
+        "pickup_lat": 51.04, "pickup_lon": -114.0,
+        "assignment_mode": "auto",
+    })
+    assert r.status_code == 409
+    assert "No available drivers" in r.json()["detail"]
+
+
+def test_create_omitting_assignment_mode_stays_pending():
+    r = client.post("/rides/", json={"pickup_text": "A", "dropoff_text": "B"})
+    assert r.status_code == 201
+    body = r.json()
+    assert body["status"] == "pending"
+    assert body["assigned_driver"] is None

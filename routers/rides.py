@@ -32,10 +32,19 @@ def _ride_out(ride: RideRequest, db: Session) -> dict:
 
 @router.post("/", response_model=RideRequestOut, status_code=201)
 def create_ride(payload: RideRequestCreate, db: Session = Depends(get_db)):
-    ride = RideRequest(**payload.model_dump())
+    ride = RideRequest(**payload.model_dump(exclude={"assignment_mode"}))
     db.add(ride)
     db.commit()
     db.refresh(ride)
+
+    if payload.assignment_mode == "auto":
+        if ride.pickup_lat is None or ride.pickup_lon is None:
+            raise HTTPException(status_code=400, detail="Ride has no pickup coordinates for auto-assignment")
+        driver = find_nearest_driver(ride.pickup_lat, ride.pickup_lon, db)
+        if not driver:
+            raise HTTPException(status_code=409, detail="No available drivers found")
+        _do_assign(ride, driver, db)
+
     return _ride_out(ride, db)
 
 
