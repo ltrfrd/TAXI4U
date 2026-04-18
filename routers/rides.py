@@ -8,8 +8,17 @@ from models.driver import Driver
 from models.ride_request import RideRequest
 from schemas.driver import DriverPublic
 from schemas.ride_request import AssignRideRequest, RideRequestCreate, RideRequestOut
+from utils.assignment import find_nearest_driver
 
 router = APIRouter(prefix="/rides", tags=["rides"])
+
+
+def _do_assign(ride: RideRequest, driver: Driver, db: Session) -> None:
+    ride.driver_id = driver.id
+    ride.status = "assigned"
+    ride.assigned_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(ride)
 
 
 def _ride_out(ride: RideRequest, db: Session) -> dict:
@@ -60,9 +69,29 @@ def assign_ride(ride_id: int, payload: AssignRideRequest, db: Session = Depends(
     if driver.status != "available":
         raise HTTPException(status_code=400, detail=f"Driver status is '{driver.status}', must be 'available'")
 
-    ride.driver_id = driver.id
-    ride.status = "assigned"
-    ride.assigned_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(ride)
+    _do_assign(ride, driver, db)
+    return _ride_out(ride, db)
+
+
+@router.post("/{ride_id}/auto-assign", response_model=RideRequestOut)
+def auto_assign_ride(ride_id: int, db: Session = Depends(get_db)):
+    ride = db.get(RideRequest, ride_id)
+    if not ride:
+        raise HTTPException(status_code=404, detail="Ride request not found")
+    if ride.status != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot assign a ride with status '{ride.status}'"
+        )
+    if ride.pickup_lat is None or ride.pickup_lon is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Ride has no pickup coordinates for auto-assignment"
+        )
+
+    driver = find_nearest_driver(ride.pickup_lat, ride.pickup_lon, db)
+    if not driver:
+        raise HTTPException(status_code=409, detail="No available drivers found")
+
+    _do_assign(ride, driver, db)
     return _ride_out(ride, db)
