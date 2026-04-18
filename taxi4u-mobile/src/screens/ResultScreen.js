@@ -6,7 +6,8 @@ import { createRide } from '../services/api';
 export default function ResultScreen({ navigation, route }) {
   const { token } = useAuth();
   const {
-    result,
+    result = null,
+    existingRide = null,
     pickup_text = '',
     dropoff_text = '',
     pickup_lat = null,
@@ -17,7 +18,7 @@ export default function ResultScreen({ navigation, route }) {
 
   const [booking, setBooking] = useState(false);
   const [bookingError, setBookingError] = useState(null);
-  const [bookedRide, setBookedRide] = useState(null);
+  const [bookedRide, setBookedRide] = useState(existingRide);
 
   async function handleBook() {
     setBooking(true);
@@ -40,52 +41,56 @@ export default function ResultScreen({ navigation, route }) {
     }
   }
 
-  const fare = result.fare;
-  const isZoneFare = result.fare_type === 'zone';
-  const totalFare = isZoneFare ? fare.total : fare.total_fare;
-  const distance = result.route?.distance_km ?? null;
-  const duration = result.route?.duration_minutes ?? null;
+  const fare = result?.fare;
+  const isZoneFare = result?.fare_type === 'zone';
+  const totalFare = isZoneFare ? fare?.total : fare?.total_fare;
+  const distance = result?.route?.distance_km ?? null;
+  const duration = result?.route?.duration_minutes ?? null;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.fareCard}>
-        <Text style={styles.fareLabel}>Estimated Fare</Text>
-        <Text style={styles.fareAmount}>${totalFare?.toFixed(2)}</Text>
-        <Text style={styles.fareType}>
-          {isZoneFare ? 'Zone-based pricing' : 'Distance-based pricing'}
-        </Text>
-      </View>
+      {result ? (
+        <>
+          <View style={styles.fareCard}>
+            <Text style={styles.fareLabel}>Estimated Fare</Text>
+            <Text style={styles.fareAmount}>${totalFare?.toFixed(2)}</Text>
+            <Text style={styles.fareType}>
+              {isZoneFare ? 'Zone-based pricing' : 'Distance-based pricing'}
+            </Text>
+          </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Zones</Text>
-        <Row label="Pickup Zone" value={result.pickup_zone} />
-        <Row label="Dropoff Zone" value={result.dropoff_zone} />
-        <Row
-          label="Detection"
-          value={`Pickup: ${result.pickup_detection_confidence ?? '-'} | Dropoff: ${result.dropoff_detection_confidence ?? '-'}`}
-        />
-      </View>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Zones</Text>
+            <Row label="Pickup Zone" value={result.pickup_zone} />
+            <Row label="Dropoff Zone" value={result.dropoff_zone} />
+            <Row
+              label="Detection"
+              value={`Pickup: ${result.pickup_detection_confidence ?? '-'} | Dropoff: ${result.dropoff_detection_confidence ?? '-'}`}
+            />
+          </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Route</Text>
-        <Row
-          label="Distance"
-          value={distance !== null ? `${distance} km` : 'Unavailable'}
-        />
-        <Row
-          label="Duration"
-          value={duration !== null ? `${duration} min` : 'Unavailable'}
-        />
-      </View>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Route</Text>
+            <Row
+              label="Distance"
+              value={distance !== null ? `${distance} km` : 'Unavailable'}
+            />
+            <Row
+              label="Duration"
+              value={duration !== null ? `${duration} min` : 'Unavailable'}
+            />
+          </View>
 
-      {isZoneFare && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Fare Breakdown</Text>
-          <Row label="Base Fare" value={`$${fare.base_fare?.toFixed(2)}`} />
-          <Row label="Stop Fee" value={`$${fare.stop_fee?.toFixed(2)}`} />
-          <Row label="Wait Fee" value={`$${fare.wait_fee?.toFixed(2)}`} />
-        </View>
-      )}
+          {isZoneFare && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Fare Breakdown</Text>
+              <Row label="Base Fare" value={`$${fare.base_fare?.toFixed(2)}`} />
+              <Row label="Stop Fee" value={`$${fare.stop_fee?.toFixed(2)}`} />
+              <Row label="Wait Fee" value={`$${fare.wait_fee?.toFixed(2)}`} />
+            </View>
+          )}
+        </>
+      ) : null}
 
       {bookedRide ? (
         <View style={styles.section}>
@@ -116,20 +121,22 @@ export default function ResultScreen({ navigation, route }) {
         </>
       )}
 
-      <TouchableOpacity
-        style={styles.mapButton}
-        onPress={() => navigation.navigate('Map', { result })}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.mapButtonText}>Open Live Map</Text>
-      </TouchableOpacity>
+      {result ? (
+        <TouchableOpacity
+          style={styles.mapButton}
+          onPress={() => navigation.navigate('Map', { result })}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.mapButtonText}>Open Live Map</Text>
+        </TouchableOpacity>
+      ) : null}
 
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => navigation.goBack()}
         activeOpacity={0.8}
       >
-        <Text style={styles.backButtonText}>New Fare Estimate</Text>
+        <Text style={styles.backButtonText}>{result ? 'New Fare Estimate' : 'Back'}</Text>
       </TouchableOpacity>
     </ScrollView>
   );

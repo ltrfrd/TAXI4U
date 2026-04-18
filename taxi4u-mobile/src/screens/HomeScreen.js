@@ -10,9 +10,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { calculateFare, reverseGeocode, searchAddresses } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { calculateFare, getMyLatestRide, reverseGeocode, searchAddresses } from '../services/api';
 
 export default function HomeScreen({ navigation }) {
+  const { token } = useAuth();
   const [pickup, setPickup] = useState('');
   const [dropoff, setDropoff] = useState('');
   const [pickupSelection, setPickupSelection] = useState(null);
@@ -21,6 +23,7 @@ export default function HomeScreen({ navigation }) {
   const [error, setError] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
   const [activeField, setActiveField] = useState(null);
+  const [lastRide, setLastRide] = useState(null);
   const debounceRef = useRef(null);
   const abortRef = useRef(null);
 
@@ -46,6 +49,17 @@ export default function HomeScreen({ navigation }) {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const ride = await getMyLatestRide(token);
+        setLastRide(ride);
+      } catch {
+        // 404 = no ride yet; any other error — stay silent
+      }
+    })();
+  }, [token]);
 
   function handleTextChange(text, field) {
     if (field === 'pickup') {
@@ -202,6 +216,20 @@ export default function HomeScreen({ navigation }) {
             )}
           </TouchableOpacity>
         </View>
+
+        {lastRide ? (
+          <TouchableOpacity
+            style={styles.lastRideCard}
+            onPress={() => navigation.navigate('Result', { existingRide: lastRide })}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.lastRideTitle}>Last Ride</Text>
+            <Text style={styles.lastRideRoute} numberOfLines={1}>
+              {lastRide.pickup_text} → {lastRide.dropoff_text}
+            </Text>
+            <Text style={styles.lastRideStatus}>{lastRide.status.replace('_', ' ')}</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     </KeyboardAvoidingView>
   );
@@ -323,5 +351,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     letterSpacing: 0.5,
+  },
+  lastRideCard: {
+    marginTop: 20,
+    backgroundColor: '#16213e',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#2a2a4a',
+  },
+  lastRideTitle: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#f5c518',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 5,
+  },
+  lastRideRoute: {
+    fontSize: 13,
+    color: '#f5f5f5',
+    marginBottom: 3,
+  },
+  lastRideStatus: {
+    fontSize: 12,
+    color: '#aab2cf',
+    textTransform: 'capitalize',
   },
 });
