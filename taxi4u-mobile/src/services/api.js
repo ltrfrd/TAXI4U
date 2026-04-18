@@ -173,6 +173,17 @@ export async function getRideById(token, rideId) {
   return response.json();
 }
 
+export async function cancelRide(token, rideId) {
+  const response = await authFetch(`${API_BASE}/rides/${rideId}/cancel`, token, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Cancel failed (${response.status})`);
+  }
+  return response.json();
+}
+
 // -------------------------------------------------------------------
 // Nominatim address autocomplete — Canada only, no backend needed
 // -------------------------------------------------------------------

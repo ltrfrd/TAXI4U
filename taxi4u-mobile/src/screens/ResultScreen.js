@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../context/AuthContext';
-import { createRide, getRideById } from '../services/api';
+import { cancelRide, createRide, getRideById } from '../services/api';
 
 export default function ResultScreen({ navigation, route }) {
   const { token } = useAuth();
@@ -21,6 +21,8 @@ export default function ResultScreen({ navigation, route }) {
   const [bookedRide, setBookedRide] = useState(existingRide);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState(null);
 
   async function handleBook() {
     setBooking(true);
@@ -43,6 +45,20 @@ export default function ResultScreen({ navigation, route }) {
     }
   }
 
+  async function handleCancel() {
+    if (!bookedRide?.id) return;
+    setCancelling(true);
+    setCancelError(null);
+    try {
+      const updated = await cancelRide(token, bookedRide.id);
+      setBookedRide(updated);
+    } catch (err) {
+      setCancelError(err.message || 'Cancel failed.');
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   async function handleRefresh() {
     if (!bookedRide?.id) return;
     setRefreshing(true);
@@ -56,6 +72,10 @@ export default function ResultScreen({ navigation, route }) {
       setRefreshing(false);
     }
   }
+
+  const showRefresh = bookedRide != null &&
+    ['pending', 'assigned', 'accepted', 'in_progress'].includes(bookedRide.status);
+  const showCancel = bookedRide?.status === 'pending';
 
   const fare = result?.fare;
   const isZoneFare = result?.fare_type === 'zone';
@@ -122,15 +142,33 @@ export default function ResultScreen({ navigation, route }) {
                 : null}
             </>
           ) : null}
-          <TouchableOpacity
-            style={[styles.refreshBtn, refreshing && { opacity: 0.5 }]}
-            onPress={handleRefresh}
-            disabled={refreshing}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.refreshBtnText}>{refreshing ? 'Refreshing…' : 'Refresh Status'}</Text>
-          </TouchableOpacity>
-          {refreshError ? <Text style={styles.refreshError}>{refreshError}</Text> : null}
+          {(showRefresh || showCancel) ? (
+            <View style={styles.statusActions}>
+              {showCancel ? (
+                <TouchableOpacity
+                  style={[styles.cancelBtn, cancelling && { opacity: 0.5 }]}
+                  onPress={handleCancel}
+                  disabled={cancelling || refreshing}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.cancelBtnText}>{cancelling ? 'Cancelling…' : 'Cancel Ride'}</Text>
+                </TouchableOpacity>
+              ) : null}
+              {showRefresh ? (
+                <TouchableOpacity
+                  style={[styles.refreshBtn, refreshing && { opacity: 0.5 }]}
+                  onPress={handleRefresh}
+                  disabled={refreshing || cancelling}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.refreshBtnText}>{refreshing ? 'Refreshing…' : 'Refresh Status'}</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
+          {(refreshError || cancelError) ? (
+            <Text style={styles.refreshError}>{refreshError || cancelError}</Text>
+          ) : null}
         </View>
       ) : (
         <>
@@ -308,9 +346,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
   },
-  refreshBtn: {
-    alignSelf: 'flex-end',
+  statusActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
     marginTop: 10,
+  },
+  cancelBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#ff6b6b',
+  },
+  cancelBtnText: {
+    color: '#ff6b6b',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  refreshBtn: {
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 6,

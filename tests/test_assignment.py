@@ -323,3 +323,24 @@ def test_create_omitting_assignment_mode_stays_pending():
     body = r.json()
     assert body["status"] == "pending"
     assert body["assigned_driver"] is None
+
+
+# ── cancel ────────────────────────────────────────────────────────────────────
+
+def test_cancel_pending_ride_succeeds():
+    ride_id = _ride()
+    r = client.post(f"/rides/{ride_id}/cancel")
+    assert r.status_code == 200
+    assert r.json()["status"] == "cancelled"
+
+
+def test_cancel_non_pending_ride_returns_400():
+    ride_id = _ride(status="assigned")
+    r = client.post(f"/rides/{ride_id}/cancel")
+    assert r.status_code == 400
+    assert "assigned" in r.json()["detail"]
+
+
+def test_cancel_missing_ride_returns_404():
+    r = client.post("/rides/99999/cancel")
+    assert r.status_code == 404

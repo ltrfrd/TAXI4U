@@ -1,16 +1,29 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models.driver import Driver
 from models.ride_request import RideRequest
+from routers.driver import get_current_driver
 from schemas.driver import DriverPublic
 from schemas.ride_request import AssignRideRequest, RideRequestCreate, RideRequestOut
 from utils.assignment import find_nearest_driver
+from utils.jwt import verify_token
 
 router = APIRouter(prefix="/rides", tags=["rides"])
+
+
+def _optional_driver_id(request: Request) -> int | None:
+    """Extract driver id from Bearer token if present; return None otherwise."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    try:
+        return int(verify_token(auth[7:])["sub"])
+    except Exception:
+        return None
 
 
 def _do_assign(ride: RideRequest, driver: Driver, db: Session) -> None:
@@ -31,8 +44,12 @@ def _ride_out(ride: RideRequest, db: Session) -> dict:
 
 
 @router.post("/", response_model=RideRequestOut, status_code=201)
-def create_ride(payload: RideRequestCreate, db: Session = Depends(get_db)):
-    ride = RideRequest(**payload.model_dump(exclude={"assignment_mode"}))
+def create_ride(payload: RideRequestCreate, request: Request, db: Session = Depends(get_db)):
+    ride_data = payload.model_dump(exclude={"assignment_mode"})
+    creator_id = _optional_driver_id(request)
+    if creator_id:
+        ride_data["created_by_id"] = creator_id
+    ride = RideRequest(**ride_data)
     db.add(ride)
     db.commit()
     db.refresh(ride)
@@ -52,6 +69,19 @@ def create_ride(payload: RideRequestCreate, db: Session = Depends(get_db)):
 def list_rides(db: Session = Depends(get_db)):
     rides = db.query(RideRequest).order_by(RideRequest.created_at.desc()).all()
     return [_ride_out(r, db) for r in rides]
+
+
+@router.get("/me/latest", response_model=RideRequestOut)
+def my_latest_ride(current_driver: Driver = Depends(get_current_driver), db: Session = Depends(get_db)):
+    ride = (
+        db.query(RideRequest)
+        .filter(RideRequest.created_by_id == current_driver.id)
+        .order_by(RideRequest.created_at.desc())
+        .first()
+    )
+    if not ride:
+        raise HTTPException(status_code=404, detail="No rides found")
+    return _ride_out(ride, db)
 
 
 @router.get("/{ride_id}", response_model=RideRequestOut)
@@ -103,4 +133,17 @@ def auto_assign_ride(ride_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=409, detail="No available drivers found")
 
     _do_assign(ride, driver, db)
+    return _ride_out(ride, db)
+
+
+@router.post("/{ride_id}/cancel", response_model=RideRequestOut)
+def cancel_ride(ride_id: int, db: Session = Depends(get_db)):
+    ride = db.get(RideRequest, ride_id)
+    if not ride:
+        raise HTTPException(status_code=404, detail="Ride request not found")
+    if ride.status != "pending":
+        raise HTTPException(status_code=400, detail=f"Cannot cancel a ride with status '{ride.status}'")
+    ride.status = "cancelled"
+    db.commit()
+    db.refresh(ride)
     return _ride_out(ride, db)

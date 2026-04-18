@@ -17,5 +17,6 @@ class RideRequest(Base):
     fare_amount = Column(Float, nullable=True)
     status = Column(String, nullable=False, default="pending", server_default="pending")
     driver_id = Column(Integer, ForeignKey("drivers.id"), nullable=True)
+    created_by_id = Column(Integer, ForeignKey("drivers.id"), nullable=True)
     assigned_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

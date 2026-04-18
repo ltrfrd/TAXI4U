@@ -33,6 +33,7 @@ _migrations = [
     "ALTER TABLE drivers ADD COLUMN status VARCHAR NOT NULL DEFAULT 'offline'",
     "ALTER TABLE ride_requests ADD COLUMN driver_id INTEGER REFERENCES drivers(id)",
     "ALTER TABLE ride_requests ADD COLUMN assigned_at DATETIME",
+    "ALTER TABLE ride_requests ADD COLUMN created_by_id INTEGER REFERENCES drivers(id)",
 ]
 with database.engine.connect() as _conn:
     for _sql in _migrations:
