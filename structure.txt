@@ -1,33 +1,106 @@
-PROJECT: TAXI4U Fare System
+PROJECT: TAXI4U
+Last updated: 2026-04-17
+
+---
 
 CURRENT STATE:
-- Fare matrix loaded from JSON
-- Zone detection using keyword mapping
-- Trip preparation, validation, and confirmation implemented
-- Fare calculation fully working
-- Unknown zone handling added
+- FastAPI backend fully operational
+- Zone fare matrix loaded from fares.json (27 zones)
+- Zone polygon data loaded from backend/data/zones.json (23 zones)
+- Geocoding via Nominatim — Canada-only, Cochrane-anchored for local inputs
+- Routing via OSRM — real driving distance + duration
+- Coordinate passthrough — mobile autocomplete provides lat/lon, bypassing geocoding
+- Three-tier zone detection: coord polygon → geocoded keyword → raw keyword
+- React Native / Expo mobile app with autocomplete, fare display, live zone map
 
-WORKFLOW:
-1. Input text (pickup/dropoff)
-2. Detect zones (zone_mapper.py)
-3. Prepare trip (calculator.py)
-4. Validate trip
-5. Confirm trip
-6. Calculate fare
+---
 
-RULES:
-- No input() inside core logic
-- All logic must be reusable (app-ready)
-- Keep functions separated by responsibility
+BACKEND FILES:
 
-NEXT STEP:
-- Improve zone detection accuracy
-- Then move to API (FastAPI)
+  main.py          FastAPI entry point. Endpoints: GET /, GET /zones, POST /fare/calculate,
+                   GET /fare/test. Handles input validation, coordinate passthrough,
+                   zone detection, fare routing, and response assembly.
+
+  calculator.py    Zone fare (fares.json matrix lookup) + distance fare ($2/km).
+                   Extra stops: $4 each. Wait fee: $0.50/min after 4 free minutes.
+
+  zone_mapper.py   Two detection modes:
+                   - detect_zone_by_coords(lat, lon): polygon boundary check, 23 zones
+                   - detect_zone / detect_possible_zones: keyword matching, 14 zones
+                   Loads polygon data from backend/data/zones.json at startup.
+
+  geocoder.py      Nominatim geocoding. Canada-only via countrycodes=ca.
+                   For inputs without a geographic anchor: tries Cochrane-anchored query,
+                   then Alberta-level, then bare Canada-only. In-memory cache per query.
+                   normalize_input() exported for early validation in main.py.
+
+  routing.py       OSRM driving distance (km) and duration (min) between two GPS points.
+
+  fares.json       Zone fare matrix. 27 zones. Source of truth for all pricing.
+
+  backend/data/
+    zones.json     Zone polygon definitions. 23 zones. Each has: name, priority, color,
+                   polygon (array of {latitude, longitude} points).
+                   Source of truth for map rendering and coordinate zone detection.
+
+---
+
+MOBILE FILES (taxi4u-mobile/):
+
+  App.js           Entry point. Mounts AppNavigator.
+
+  app.json         Expo config. Permissions: foreground location (expo-location).
+                   Plugins: expo-location, expo-asset.
+
+  package.json     Expo 54. Key deps: react-navigation/stack, react-native-maps,
+                   expo-location, react-native-gesture-handler, react-native-screens.
+
+  src/navigation/
+    AppNavigator.js  Stack: Home → Result → Map
+
+  src/screens/
+    HomeScreen.js    Address input with 400ms debounced autocomplete (Nominatim,
+                     Canada-only, direct from app). Selected suggestion stores lat/lon.
+                     Passes optional pickup_coords/dropoff_coords to fare request.
+
+    ResultScreen.js  Displays fare amount, zone names, detection confidence,
+                     route distance + duration, fare breakdown. "Open Live Map" button.
+
+    MapScreen.js     Fetches zones from backend /zones. Draws zone polygons via
+                     react-native-maps. Live GPS tracking via expo-location. On-device
+                     point-in-polygon detection. Shows pickup/dropoff/driver markers.
+
+  src/services/
+    api.js           calculateFare(pickup, dropoff, {pickupCoords, dropoffCoords})
+                     fetchZones() → GET /zones
+                     searchAddresses(query) → Nominatim autocomplete, Canada-only
+
+  src/data/
+    zones.js         Calls fetchZones from api.js. Sorts by priority. Normalizes shape
+                     for MapScreen. Provides DEFAULT_MAP_REGION (Cochrane centre).
+
+  src/utils/
+    zoneDetection.js  isPointInPolygon (ray casting).
+                      findZoneForCoordinates(lat, lon, zones) → zone name or null.
+                      Runs entirely on-device, no network call.
+
+---
 
 ENVIRONMENT:
-- No venv yet
-- Activate venv when installing packages
+  Backend: Python 3.11+, venv, FastAPI, Uvicorn, Requests
+  Mobile: Node 18+, Expo Go on device
+
+RUN BACKEND:
+  cd TAXI4U
+  venv\Scripts\activate
+  python -m uvicorn main:app --reload --port 8001
+
+RUN MOBILE:
+  cd TAXI4U/taxi4u-mobile
+  npm install
+  npx expo start
+  (Update API_BASE in src/services/api.js to your local machine IP)
 
 HOW TO RESUME IN NEW CHAT:
-- Say: "Continue TAXI4U project"
-- Provide README.md + structure.txt
+  Say: "Continue TAXI4U project"
+  Provide README.md + structure.txt

@@ -10,13 +10,26 @@
 // Example: const API_BASE = 'http://192.168.1.42:8001';
 // ---------------------------------------------------------------
 const API_BASE = 'http://10.0.0.166:8001';
-export async function calculateFare(pickup, dropoff) {
+export async function calculateFare(pickup, dropoff, options = {}) {
+  const body = {
+    pickup,
+    dropoff,
+  };
+
+  if (options.pickupCoords) {
+    body.pickup_coords = options.pickupCoords;
+  }
+
+  if (options.dropoffCoords) {
+    body.dropoff_coords = options.dropoffCoords;
+  }
+
   const response = await fetch(`${API_BASE}/fare/calculate`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ pickup, dropoff }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -67,7 +80,13 @@ export async function searchAddresses(query) {
     });
     if (!res.ok) return [];
     const hits = await res.json();
-    return hits.map(r => ({ label: _formatLabel(r), value: r.display_name }));
+    return hits.map(r => ({
+      label: _formatLabel(r),
+      value: r.display_name,
+      lat: Number(r.lat),
+      lon: Number(r.lon),
+      display_name: r.display_name,
+    }));
   } catch {
     return [];
   }

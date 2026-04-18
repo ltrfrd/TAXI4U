@@ -14,6 +14,8 @@ import { calculateFare, searchAddresses } from '../services/api';
 export default function HomeScreen({ navigation }) {
   const [pickup, setPickup] = useState('');
   const [dropoff, setDropoff] = useState('');
+  const [pickupSelection, setPickupSelection] = useState(null);
+  const [dropoffSelection, setDropoffSelection] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
@@ -24,8 +26,17 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => () => clearTimeout(debounceRef.current), []);
 
   function handleTextChange(text, field) {
-    if (field === 'pickup') setPickup(text);
-    else setDropoff(text);
+    if (field === 'pickup') {
+      setPickup(text);
+      setPickupSelection(current =>
+        current && text !== current.label ? null : current
+      );
+    } else {
+      setDropoff(text);
+      setDropoffSelection(current =>
+        current && text !== current.label ? null : current
+      );
+    }
 
     setActiveField(field);
     clearTimeout(debounceRef.current);
@@ -49,8 +60,13 @@ export default function HomeScreen({ navigation }) {
   }
 
   function handleSelect(item, field) {
-    if (field === 'pickup') setPickup(item.label);
-    else setDropoff(item.label);
+    if (field === 'pickup') {
+      setPickup(item.label);
+      setPickupSelection(item);
+    } else {
+      setDropoff(item.label);
+      setDropoffSelection(item);
+    }
     setSuggestions([]);
     setActiveField(null);
     clearTimeout(debounceRef.current);
@@ -65,7 +81,10 @@ export default function HomeScreen({ navigation }) {
     setError(null);
     setLoading(true);
     try {
-      const result = await calculateFare(pickup.trim(), dropoff.trim());
+      const result = await calculateFare(pickup.trim(), dropoff.trim(), {
+        pickupCoords: toRequestCoords(pickupSelection),
+        dropoffCoords: toRequestCoords(dropoffSelection),
+      });
       navigation.navigate('Result', { result });
     } catch (err) {
       setError(err.message || 'Something went wrong. Check your connection.');
@@ -154,6 +173,22 @@ export default function HomeScreen({ navigation }) {
       </View>
     </KeyboardAvoidingView>
   );
+}
+
+function toRequestCoords(selection) {
+  if (
+    !selection ||
+    !Number.isFinite(selection.lat) ||
+    !Number.isFinite(selection.lon)
+  ) {
+    return null;
+  }
+
+  return {
+    lat: selection.lat,
+    lon: selection.lon,
+    display_name: selection.display_name || selection.label,
+  };
 }
 
 const styles = StyleSheet.create({

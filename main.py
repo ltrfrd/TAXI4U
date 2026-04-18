@@ -82,6 +82,14 @@ def fare_test():
 class FareRequest(BaseModel):
     pickup: str
     dropoff: str
+    pickup_coords: "FareLocationCoords | None" = None
+    dropoff_coords: "FareLocationCoords | None" = None
+
+
+class FareLocationCoords(BaseModel):
+    lat: float
+    lon: float
+    display_name: str | None = None
 
 
 # -----------------------------------------------------------
@@ -101,9 +109,14 @@ def calculate_fare_endpoint(request: FareRequest):
             "dropoff_error": dropoff_err,
         }
 
-    # --- Geocode both addresses ---
-    pickup_coords = geocode_address(request.pickup)
-    dropoff_coords = geocode_address(request.dropoff)
+    # --- Use provided coords when present; otherwise geocode as before ---
+    pickup_coords = provided_or_geocoded_coords(request.pickup_coords, request.pickup)
+    if pickup_coords is None:
+        pickup_coords = geocode_address(request.pickup)
+
+    dropoff_coords = provided_or_geocoded_coords(request.dropoff_coords, request.dropoff)
+    if dropoff_coords is None:
+        dropoff_coords = geocode_address(request.dropoff)
 
     # --- Get real route distance/duration (always, for driver convenience) ---
     route = None
@@ -199,4 +212,15 @@ def calculate_fare_endpoint(request: FareRequest):
         "message": "Multiple possible zones detected" if pickup_ambiguous or dropoff_ambiguous else None,
         "fare_type": "distance",
         "fare": calculate_distance_fare(distance_km),
+    }
+
+
+def provided_or_geocoded_coords(coords: FareLocationCoords | None, fallback_text: str) -> dict | None:
+    if coords is None:
+        return None
+
+    return {
+        "lat": coords.lat,
+        "lon": coords.lon,
+        "display_name": coords.display_name or fallback_text,
     }
