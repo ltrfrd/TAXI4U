@@ -4,6 +4,7 @@ import { TouchableOpacity, Text } from 'react-native';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import DriverLoginScreen from '../screens/DriverLoginScreen';
 import DriverProfileScreen from '../screens/DriverProfileScreen';
+import DriverRidesScreen from '../screens/DriverRidesScreen';
 import HomeScreen from '../screens/HomeScreen';
 import MapScreen from '../screens/MapScreen';
 import ResultScreen from '../screens/ResultScreen';
@@ -46,6 +47,11 @@ function RootNavigator() {
             name="DriverProfile"
             component={DriverProfileScreen}
             options={{ title: 'My Profile' }}
+          />
+          <Stack.Screen
+            name="DriverRides"
+            component={DriverRidesScreen}
+            options={{ title: 'My Rides' }}
           />
         </>
       ) : (

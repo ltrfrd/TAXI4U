@@ -13,4 +13,5 @@ class Driver(Base):
     phone = Column(String, nullable=True)
     password_hash = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
+    status = Column(String, nullable=False, default="offline", server_default="offline")
     created_at = Column(DateTime(timezone=True), server_default=func.now())

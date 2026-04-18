@@ -74,6 +74,47 @@ export function authFetch(url, token, options = {}) {
 }
 
 // -------------------------------------------------------------------
+// Driver rides
+// -------------------------------------------------------------------
+
+export async function getDriverRides(token) {
+  const response = await authFetch(`${API_BASE}/driver/rides`, token);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Failed to load rides (${response.status})`);
+  }
+  return response.json();
+}
+
+// action: 'accept' | 'decline' | 'start' | 'complete'
+export async function rideAction(token, rideId, action) {
+  const response = await authFetch(`${API_BASE}/driver/rides/${rideId}/${action}`, token, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Action '${action}' failed (${response.status})`);
+  }
+  return response.json();
+}
+
+// -------------------------------------------------------------------
+// Driver status
+// -------------------------------------------------------------------
+
+export async function updateDriverStatus(token, status) {
+  const response = await authFetch(`${API_BASE}/driver/status`, token, {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Status update failed (${response.status})`);
+  }
+  return response.json(); // { status }
+}
+
+// -------------------------------------------------------------------
 // Driver location
 // -------------------------------------------------------------------
 

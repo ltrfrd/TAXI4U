@@ -9,7 +9,9 @@ from pydantic import BaseModel
 import database
 import models.driver          # registers Driver table with Base metadata
 import models.driver_location  # registers DriverLocation table with Base metadata
+import models.ride_request     # registers RideRequest table with Base metadata
 from routers.driver import router as driver_router
+from routers.rides import router as rides_router
 from calculator import (
     calculate_distance_fare,
     calculate_fare,
@@ -24,7 +26,24 @@ from zone_mapper import ZONES, detect_zone, detect_possible_zones, detect_zone_b
 app = FastAPI(title="TAXI4U Fare API")
 
 database.Base.metadata.create_all(bind=database.engine)
+
+# Idempotent column migrations
+from sqlalchemy import text as _text
+_migrations = [
+    "ALTER TABLE drivers ADD COLUMN status VARCHAR NOT NULL DEFAULT 'offline'",
+    "ALTER TABLE ride_requests ADD COLUMN driver_id INTEGER REFERENCES drivers(id)",
+    "ALTER TABLE ride_requests ADD COLUMN assigned_at DATETIME",
+]
+with database.engine.connect() as _conn:
+    for _sql in _migrations:
+        try:
+            _conn.execute(_text(_sql))
+            _conn.commit()
+        except Exception:
+            pass  # column already exists
+
 app.include_router(driver_router)
+app.include_router(rides_router)
 
 DISTANCE_FALLBACK_KM = 10
 

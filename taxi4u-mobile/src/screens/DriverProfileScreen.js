@@ -8,24 +8,41 @@ import {
   View,
 } from 'react-native';
 import * as Location from 'expo-location';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
-import { getDriverProfile, updateDriverLocation } from '../services/api';
+import { getDriverProfile, updateDriverLocation, updateDriverStatus } from '../services/api';
 
 export default function DriverProfileScreen() {
   const { token, logout } = useAuth();
+  const navigation = useNavigation();
 
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [locStatus, setLocStatus] = useState('idle'); // idle | loading | ok | error
   const [locMessage, setLocMessage] = useState('');
+  const [driverStatus, setDriverStatus] = useState(null); // offline | available | busy
+  const [statusUpdating, setStatusUpdating] = useState(false);
 
   useEffect(() => {
     getDriverProfile(token)
-      .then(setProfile)
+      .then(data => { setProfile(data); setDriverStatus(data.status ?? 'offline'); })
       .catch(err => setError(err.message || 'Failed to load profile.'))
       .finally(() => setLoading(false));
   }, [token]);
+
+  async function changeStatus(newStatus) {
+    if (newStatus === driverStatus || statusUpdating) return;
+    setStatusUpdating(true);
+    try {
+      const res = await updateDriverStatus(token, newStatus);
+      setDriverStatus(res.status);
+    } catch {
+      // keep previous status on failure — no crash
+    } finally {
+      setStatusUpdating(false);
+    }
+  }
 
   async function shareLocation() {
     setLocStatus('loading');
@@ -67,7 +84,7 @@ export default function DriverProfileScreen() {
           <ProfileRow label="Email" value={profile?.email} />
           <ProfileRow label="Phone" value={profile?.phone ?? '—'} />
           <ProfileRow
-            label="Status"
+            label="Account"
             value={profile?.is_active ? 'Active' : 'Inactive'}
             valueStyle={profile?.is_active ? styles.active : styles.inactive}
           />
@@ -77,6 +94,34 @@ export default function DriverProfileScreen() {
           />
         </View>
       )}
+
+      {driverStatus !== null ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Driver Status</Text>
+          <View style={styles.statusRow}>
+            {['offline', 'available', 'busy'].map(s => (
+              <TouchableOpacity
+                key={s}
+                style={[styles.statusBtn, driverStatus === s && styles.statusBtnActive]}
+                onPress={() => changeStatus(s)}
+                disabled={statusUpdating || driverStatus === s}
+              >
+                <Text style={[styles.statusBtnText, driverStatus === s && styles.statusBtnTextActive]}>
+                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {statusUpdating ? <ActivityIndicator size="small" color="#f5c518" style={{ marginTop: 10 }} /> : null}
+        </View>
+      ) : null}
+
+      <TouchableOpacity
+        style={styles.ridesButton}
+        onPress={() => navigation.navigate('DriverRides')}
+      >
+        <Text style={styles.ridesButtonText}>🚕  My Rides</Text>
+      </TouchableOpacity>
 
       <TouchableOpacity
         style={[styles.locationButton, locStatus === 'loading' && styles.buttonDisabled]}
@@ -169,6 +214,43 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 24,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  statusBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#f5c518',
+    alignItems: 'center',
+  },
+  statusBtnActive: {
+    backgroundColor: '#f5c518',
+  },
+  statusBtnText: {
+    color: '#f5c518',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  statusBtnTextActive: {
+    color: '#1a1a2e',
+  },
+  ridesButton: {
+    borderWidth: 1,
+    borderColor: '#f5c518',
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  ridesButtonText: {
+    color: '#f5c518',
+    fontSize: 15,
+    fontWeight: '600',
   },
   locationButton: {
     backgroundColor: '#f5c518',
