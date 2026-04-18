@@ -1,7 +1,44 @@
+import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useAuth } from '../context/AuthContext';
+import { createRide } from '../services/api';
 
 export default function ResultScreen({ navigation, route }) {
-  const { result } = route.params;
+  const { token } = useAuth();
+  const {
+    result,
+    pickup_text = '',
+    dropoff_text = '',
+    pickup_lat = null,
+    pickup_lon = null,
+    dropoff_lat = null,
+    dropoff_lon = null,
+  } = route.params;
+
+  const [booking, setBooking] = useState(false);
+  const [bookingError, setBookingError] = useState(null);
+  const [bookedRideId, setBookedRideId] = useState(null);
+
+  async function handleBook() {
+    setBooking(true);
+    setBookingError(null);
+    try {
+      const ride = await createRide(token, {
+        pickup_text,
+        dropoff_text,
+        pickup_lat,
+        pickup_lon,
+        dropoff_lat,
+        dropoff_lon,
+        assignment_mode: 'auto',
+      });
+      setBookedRideId(ride.id);
+    } catch (err) {
+      setBookingError(err.message || 'Booking failed.');
+    } finally {
+      setBooking(false);
+    }
+  }
 
   const fare = result.fare;
   const isZoneFare = result.fare_type === 'zone';
@@ -48,6 +85,24 @@ export default function ResultScreen({ navigation, route }) {
           <Row label="Stop Fee" value={`$${fare.stop_fee?.toFixed(2)}`} />
           <Row label="Wait Fee" value={`$${fare.wait_fee?.toFixed(2)}`} />
         </View>
+      )}
+
+      {bookedRideId ? (
+        <View style={styles.bookConfirm}>
+          <Text style={styles.bookConfirmText}>Ride booked! A driver is on the way.</Text>
+        </View>
+      ) : (
+        <>
+          {bookingError ? <Text style={styles.bookError}>{bookingError}</Text> : null}
+          <TouchableOpacity
+            style={[styles.bookButton, booking && { opacity: 0.6 }]}
+            onPress={handleBook}
+            disabled={booking}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.bookButtonText}>{booking ? 'Booking…' : 'Book Ride'}</Text>
+          </TouchableOpacity>
+        </>
       )}
 
       <TouchableOpacity
@@ -175,5 +230,39 @@ const styles = StyleSheet.create({
     color: '#f5c518',
     fontSize: 15,
     fontWeight: '600',
+  },
+  bookButton: {
+    backgroundColor: '#2ecc71',
+    borderRadius: 10,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  bookButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  bookConfirm: {
+    backgroundColor: '#1a3a2a',
+    borderRadius: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#2ecc71',
+  },
+  bookConfirmText: {
+    color: '#2ecc71',
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  bookError: {
+    color: '#ff6b6b',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 8,
   },
 });

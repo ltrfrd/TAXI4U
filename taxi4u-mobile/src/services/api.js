@@ -140,6 +140,22 @@ export async function getMyLocation(token) {
 }
 
 // -------------------------------------------------------------------
+// Ride creation
+// -------------------------------------------------------------------
+
+export async function createRide(token, payload) {
+  const response = await authFetch(`${API_BASE}/rides/`, token, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Booking failed (${response.status})`);
+  }
+  return response.json();
+}
+
+// -------------------------------------------------------------------
 // Nominatim address autocomplete — Canada only, no backend needed
 // -------------------------------------------------------------------
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
@@ -180,5 +196,21 @@ export async function searchAddresses(query, signal) {
   } catch (err) {
     if (err.name === 'AbortError') return [];
     return [];
+  }
+}
+
+export async function reverseGeocode(lat, lon) {
+  try {
+    const params = new URLSearchParams({ lat, lon, format: 'json', addressdetails: '1' });
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?${params}`,
+      { headers: { 'User-Agent': 'TAXI4U-MobileApp/1.0' } },
+    );
+    if (!res.ok) return null;
+    const r = await res.json();
+    if (r.error) return null;
+    return { label: _formatLabel(r), lat, lon, display_name: r.display_name };
+  } catch {
+    return null;
   }
 }

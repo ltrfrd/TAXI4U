@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import * as Location from 'expo-location';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -9,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { calculateFare, searchAddresses } from '../services/api';
+import { calculateFare, reverseGeocode, searchAddresses } from '../services/api';
 
 export default function HomeScreen({ navigation }) {
   const [pickup, setPickup] = useState('');
@@ -26,6 +27,24 @@ export default function HomeScreen({ navigation }) {
   useEffect(() => () => {
     clearTimeout(debounceRef.current);
     abortRef.current?.abort();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const { latitude, longitude } = pos.coords;
+        const place = await reverseGeocode(latitude, longitude);
+        if (place) {
+          setPickup(place.label);
+          setPickupSelection(place);
+        }
+      } catch {
+        // silent — manual entry still works
+      }
+    })();
   }, []);
 
   function handleTextChange(text, field) {
@@ -90,7 +109,15 @@ export default function HomeScreen({ navigation }) {
         pickupCoords: toRequestCoords(pickupSelection),
         dropoffCoords: toRequestCoords(dropoffSelection),
       });
-      navigation.navigate('Result', { result });
+      navigation.navigate('Result', {
+        result,
+        pickup_text: pickup.trim(),
+        dropoff_text: dropoff.trim(),
+        pickup_lat: pickupSelection?.lat ?? null,
+        pickup_lon: pickupSelection?.lon ?? null,
+        dropoff_lat: dropoffSelection?.lat ?? null,
+        dropoff_lon: dropoffSelection?.lon ?? null,
+      });
     } catch (err) {
       setError(err.message || 'Something went wrong. Check your connection.');
     } finally {
