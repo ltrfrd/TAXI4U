@@ -21,9 +21,12 @@ export default function HomeScreen({ navigation }) {
   const [suggestions, setSuggestions] = useState([]);
   const [activeField, setActiveField] = useState(null);
   const debounceRef = useRef(null);
+  const abortRef = useRef(null);
 
-  // Clear pending timer on unmount to avoid setState on dead component
-  useEffect(() => () => clearTimeout(debounceRef.current), []);
+  useEffect(() => () => {
+    clearTimeout(debounceRef.current);
+    abortRef.current?.abort();
+  }, []);
 
   function handleTextChange(text, field) {
     if (field === 'pickup') {
@@ -47,7 +50,9 @@ export default function HomeScreen({ navigation }) {
     }
 
     debounceRef.current = setTimeout(async () => {
-      const results = await searchAddresses(text.trim());
+      abortRef.current?.abort();
+      abortRef.current = new AbortController();
+      const results = await searchAddresses(text.trim(), abortRef.current.signal);
       setSuggestions(results);
     }, 400);
   }

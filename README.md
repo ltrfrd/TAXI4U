@@ -307,6 +307,7 @@ Fixed test trip using hardcoded zone names. Useful for verifying the fare engine
 TAXI4U/
 ├── main.py                        # FastAPI app — /fare/calculate, /zones endpoints
 ├── calculator.py                  # Zone fare + distance fare calculation
+├── config.py                      # External service URLs (Nominatim, OSRM) — edit to swap providers
 ├── zone_mapper.py                 # Keyword + coordinate-based zone detection
 ├── geocoder.py                    # Nominatim geocoding (Canada-only, Cochrane-anchored)
 ├── routing.py                     # OSRM driving distance/duration
@@ -320,6 +321,7 @@ TAXI4U/
     ├── app.json                   # Expo config (permissions, splash, plugins)
     ├── package.json               # Dependencies (Expo 54, react-navigation, maps, location)
     └── src/
+        ├── config.js              # API_BASE — update to local machine IP before running
         ├── navigation/
         │   └── AppNavigator.js    # Stack navigator: Home → Result → Map
         ├── screens/
@@ -327,7 +329,8 @@ TAXI4U/
         │   ├── ResultScreen.js    # Fare display + route info + Open Live Map
         │   └── MapScreen.js       # Live zone map with GPS driver tracking
         ├── services/
-        │   └── api.js             # calculateFare, fetchZones, searchAddresses
+        │   ├── api.js             # calculateFare, fetchZones, searchAddresses (AbortSignal support)
+        │   └── backgroundLocation.js  # Stub — background GPS tracking (not yet implemented)
         ├── data/
         │   └── zones.js           # Thin wrapper: fetchZones from API → sorted, normalized
         └── utils/
@@ -396,7 +399,7 @@ npx expo start
 
 Scan the QR code with Expo Go (Android) or the Camera app (iOS).
 
-**Important:** Update `API_BASE` in `taxi4u-mobile/src/services/api.js` to your machine's local IP address before running. The default `localhost` does not reach your machine from a physical device or emulator.
+**Important:** Update `API_BASE` in `taxi4u-mobile/src/config.js` to your machine's local IP address before running. The default `localhost` does not reach your machine from a physical device or emulator.
 
 ```bash
 # Windows — find your IPv4 address
@@ -406,7 +409,7 @@ ipconfig
 ifconfig
 ```
 
-Example: `const API_BASE = 'http://192.168.1.42:8001';`
+Example: `export const API_BASE = 'http://192.168.1.42:8001';`
 
 ---
 

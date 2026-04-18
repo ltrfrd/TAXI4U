@@ -10,8 +10,9 @@ import re
 
 import requests
 
-NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-HEADERS = {"User-Agent": "TAXI4U-FareCalculator/1.0"}
+from config import NOMINATIM_HEADERS, NOMINATIM_URL
+
+HEADERS = NOMINATIM_HEADERS
 
 _cache: dict[str, dict | None] = {}
 

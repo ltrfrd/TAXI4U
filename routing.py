@@ -5,7 +5,7 @@
 
 import requests
 
-OSRM_URL = "http://router.project-osrm.org/route/v1/driving"
+from config import OSRM_URL
 
 
 def get_route(origin: dict, destination: dict) -> dict | None:

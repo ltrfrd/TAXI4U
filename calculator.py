@@ -4,9 +4,10 @@
 # -----------------------------------------------------------
 
 import json
-from zone_mapper import detect_zone, detect_possible_zones
+from pathlib import Path
 
-with open("fares.json", "r") as f:                         # Load fare matrix
+_FARES_PATH = Path(__file__).resolve().parent / "fares.json"
+with _FARES_PATH.open("r", encoding="utf-8") as f:
     fares = json.load(f)
 
 

@@ -1,20 +1,7 @@
-// ---------------------------------------------------------------
-// IMPORTANT: Replace with your computer's local IP address.
-// "localhost" does not work on a physical phone or emulator —
-// the device needs to reach your machine over the network.
-//
-// Find your IP:
-//   Windows: run  ipconfig  → look for IPv4 Address
-//   Mac/Linux: run  ifconfig  → look for inet
-//
-// Example: const API_BASE = 'http://192.168.1.42:8001';
-// ---------------------------------------------------------------
-const API_BASE = 'http://10.0.0.166:8001';
+import { API_BASE } from '../config';
+
 export async function calculateFare(pickup, dropoff, options = {}) {
-  const body = {
-    pickup,
-    dropoff,
-  };
+  const body = { pickup, dropoff };
 
   if (options.pickupCoords) {
     body.pickup_coords = options.pickupCoords;
@@ -26,9 +13,7 @@ export async function calculateFare(pickup, dropoff, options = {}) {
 
   const response = await fetch(`${API_BASE}/fare/calculate`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
 
@@ -64,7 +49,7 @@ function _formatLabel(r) {
   return [place, city, province].filter(Boolean).join(', ') || r.display_name;
 }
 
-export async function searchAddresses(query) {
+export async function searchAddresses(query, signal) {
   const q = (query || '').trim();
   if (q.length < 2) return [];
   try {
@@ -77,6 +62,7 @@ export async function searchAddresses(query) {
     });
     const res = await fetch(`${NOMINATIM}?${params}`, {
       headers: { 'User-Agent': 'TAXI4U-MobileApp/1.0' },
+      signal,
     });
     if (!res.ok) return [];
     const hits = await res.json();
@@ -87,7 +73,8 @@ export async function searchAddresses(query) {
       lon: Number(r.lon),
       display_name: r.display_name,
     }));
-  } catch {
+  } catch (err) {
+    if (err.name === 'AbortError') return [];
     return [];
   }
 }
