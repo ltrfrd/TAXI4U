@@ -6,6 +6,10 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+import database
+import models.driver          # registers Driver table with Base metadata
+import models.driver_location  # registers DriverLocation table with Base metadata
+from routers.driver import router as driver_router
 from calculator import (
     calculate_distance_fare,
     calculate_fare,
@@ -18,6 +22,9 @@ from zone_mapper import ZONES, detect_zone, detect_possible_zones, detect_zone_b
 
 
 app = FastAPI(title="TAXI4U Fare API")
+
+database.Base.metadata.create_all(bind=database.engine)
+app.include_router(driver_router)
 
 DISTANCE_FALLBACK_KM = 10
 

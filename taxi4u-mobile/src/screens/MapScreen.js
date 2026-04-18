@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Marker, Polygon } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useFocusEffect } from '@react-navigation/native';
 import { DEFAULT_MAP_REGION, fetchZones } from '../data/zones';
 import { findZoneForCoordinates } from '../utils/zoneDetection';
+import { useAuth } from '../context/AuthContext';
+import { getMyLocation } from '../services/api';
 
 export default function MapScreen({ route }) {
   const { result } = route.params;
+  const { token } = useAuth();
   const mapRef = useRef(null);
   const [liveLocation, setLiveLocation] = useState(null);
   const [currentZone, setCurrentZone] = useState(null);
@@ -17,6 +20,8 @@ export default function MapScreen({ route }) {
   const [permissionError, setPermissionError] = useState(null);
   const [zones, setZones] = useState([]);
   const [zonesError, setZonesError] = useState(null);
+  const [backendLocation, setBackendLocation] = useState(null); // { latitude, longitude, updated_at }
+  const [backendLocRefreshing, setBackendLocRefreshing] = useState(false);
 
   const pickupCoordinate = toMarkerCoordinate(result?.pickup_coords);
   const dropoffCoordinate = toMarkerCoordinate(result?.dropoff_coords);
@@ -145,6 +150,26 @@ export default function MapScreen({ route }) {
     }, [zones])
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      if (!token) return;
+      let active = true;
+      getMyLocation(token)
+        .then(loc => { if (active) setBackendLocation(loc); })
+        .catch(() => { if (active) setBackendLocation(null); }); // 404 or no location yet — silent
+      return () => { active = false; };
+    }, [token])
+  );
+
+  function refreshBackendLocation() {
+    if (!token || backendLocRefreshing) return;
+    setBackendLocRefreshing(true);
+    getMyLocation(token)
+      .then(setBackendLocation)
+      .catch(() => setBackendLocation(null))
+      .finally(() => setBackendLocRefreshing(false));
+  }
+
   return (
     <View style={styles.container}>
       <MapView
@@ -177,7 +202,16 @@ export default function MapScreen({ route }) {
         ) : null}
 
         {liveLocation ? (
-          <Marker coordinate={liveLocation} title="Driver" pinColor="#f5c518" />
+          <Marker coordinate={liveLocation} title="Driver (Live)" pinColor="#f5c518" />
+        ) : null}
+
+        {backendLocation ? (
+          <Marker
+            coordinate={{ latitude: backendLocation.latitude, longitude: backendLocation.longitude }}
+            title="Last Saved Location"
+            description={backendLocation.updated_at ? new Date(backendLocation.updated_at).toLocaleTimeString() : undefined}
+            pinColor="#4a90e2"
+          />
         ) : null}
       </MapView>
 
@@ -197,6 +231,23 @@ export default function MapScreen({ route }) {
               : 'Waiting for location'
           }
         />
+        <InfoRow
+          label="Saved Location"
+          value={
+            backendLocation
+              ? `${backendLocation.latitude.toFixed(5)}, ${backendLocation.longitude.toFixed(5)}`
+              : token ? 'None saved yet' : '—'
+          }
+        />
+
+        {token ? (
+          <TouchableOpacity style={styles.refreshButton} onPress={refreshBackendLocation} disabled={backendLocRefreshing}>
+            {backendLocRefreshing
+              ? <ActivityIndicator size="small" color="#f5c518" />
+              : <Text style={styles.refreshText}>↻  Refresh Saved Location</Text>}
+          </TouchableOpacity>
+        ) : null}
+
         {permissionState === 'pending' ? (
           <View style={styles.statusRow}>
             <ActivityIndicator size="small" color="#f5c518" />
@@ -325,5 +376,17 @@ const styles = StyleSheet.create({
     color: '#ff7b7b',
     fontSize: 13,
     marginTop: 10,
+  },
+  refreshButton: {
+    marginTop: 10,
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#2a2a4a',
+  },
+  refreshText: {
+    color: '#f5c518',
+    fontSize: 12,
   },
 });

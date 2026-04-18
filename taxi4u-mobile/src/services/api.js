@@ -36,6 +36,69 @@ export async function fetchZones() {
 }
 
 // -------------------------------------------------------------------
+// Driver auth
+// -------------------------------------------------------------------
+
+export async function loginDriver(email, password) {
+  const response = await fetch(`${API_BASE}/driver/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Login failed (${response.status})`);
+  }
+  return response.json(); // { access_token, token_type }
+}
+
+export async function getDriverProfile(token) {
+  const response = await authFetch(`${API_BASE}/driver/me`, token);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Failed to load profile (${response.status})`);
+  }
+  return response.json();
+}
+
+// Attach Authorization: Bearer <token> to any protected request.
+export function authFetch(url, token, options = {}) {
+  return fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+// -------------------------------------------------------------------
+// Driver location
+// -------------------------------------------------------------------
+
+export async function updateDriverLocation(token, latitude, longitude) {
+  const response = await authFetch(`${API_BASE}/driver/location`, token, {
+    method: 'POST',
+    body: JSON.stringify({ latitude, longitude }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Location update failed (${response.status})`);
+  }
+  return response.json(); // { latitude, longitude, updated_at }
+}
+
+export async function getMyLocation(token) {
+  const response = await authFetch(`${API_BASE}/driver/location/me`, token);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Failed to get location (${response.status})`);
+  }
+  return response.json();
+}
+
+// -------------------------------------------------------------------
 // Nominatim address autocomplete — Canada only, no backend needed
 // -------------------------------------------------------------------
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
