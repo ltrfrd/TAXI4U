@@ -17,7 +17,7 @@ export default function ResultScreen({ navigation, route }) {
 
   const [booking, setBooking] = useState(false);
   const [bookingError, setBookingError] = useState(null);
-  const [bookedRideId, setBookedRideId] = useState(null);
+  const [bookedRide, setBookedRide] = useState(null);
 
   async function handleBook() {
     setBooking(true);
@@ -32,7 +32,7 @@ export default function ResultScreen({ navigation, route }) {
         dropoff_lon,
         assignment_mode: 'auto',
       });
-      setBookedRideId(ride.id);
+      setBookedRide(ride);
     } catch (err) {
       setBookingError(err.message || 'Booking failed.');
     } finally {
@@ -87,9 +87,20 @@ export default function ResultScreen({ navigation, route }) {
         </View>
       )}
 
-      {bookedRideId ? (
-        <View style={styles.bookConfirm}>
-          <Text style={styles.bookConfirmText}>Ride booked! A driver is on the way.</Text>
+      {bookedRide ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Ride Status</Text>
+          <Row label="Status"  value={bookedRide.status.replace('_', ' ')} />
+          <Row label="Pickup"  value={bookedRide.pickup_text} />
+          <Row label="Dropoff" value={bookedRide.dropoff_text} />
+          {bookedRide.assigned_driver ? (
+            <>
+              <Row label="Driver" value={bookedRide.assigned_driver.name} />
+              {bookedRide.assigned_driver.phone
+                ? <Row label="Phone" value={bookedRide.assigned_driver.phone} />
+                : null}
+            </>
+          ) : null}
         </View>
       ) : (
         <>
