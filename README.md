@@ -126,6 +126,22 @@ Manual typing without selecting a suggestion still works. In that case no coordi
 
 ---
 
+## Live Map
+
+After a fare is calculated, the driver can open a live zone map from the ResultScreen.
+
+**Zone polygons** — MapScreen fetches all zone definitions from the backend `GET /zones` endpoint on load. Each zone is drawn as a colored polygon using `react-native-maps`. The active zone (the one containing the driver's current position) is highlighted with a brighter stroke and fill.
+
+**Driver location** — `expo-location` requests foreground location permission and begins watching GPS position with a 10-metre distance interval and 3-second minimum time interval. The driver's current position is shown as a gold marker on the map.
+
+**Zone switching** — On every GPS update, `findZoneForCoordinates()` runs a point-in-polygon ray-casting check on-device against the loaded polygon set. When the driver crosses into a different zone the previous zone name and timestamp are recorded and displayed in the info card at the bottom of the screen.
+
+**Pickup and dropoff markers** — The coordinates from the fare result are shown as green (pickup) and red (dropoff) markers. The map auto-fits to include both when the screen opens.
+
+Zone detection on the map is fully on-device — no additional network calls are made after the initial zone polygon fetch.
+
+---
+
 ## Zone Detection
 
 Zone detection runs in three tiers, from highest to lowest confidence:
@@ -357,10 +373,12 @@ python -m venv venv
 venv\Scripts\activate        # Windows
 # source venv/bin/activate   # Mac / Linux
 pip install fastapi uvicorn requests
-python -m uvicorn main:app --reload --port 8001
+python -m uvicorn main:app --reload --host 0.0.0.0 --port 8001
 ```
 
 Interactive API docs (Swagger UI): `http://127.0.0.1:8001/docs`
+
+`--host 0.0.0.0` is required so the server accepts connections from devices on the same local network (your phone running Expo Go). Without it the server binds to `127.0.0.1` only and the mobile app cannot reach it.
 
 The backend must be run from the `TAXI4U/` root directory — `fares.json` is loaded from a relative path.
 
