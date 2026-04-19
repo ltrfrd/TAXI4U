@@ -20,6 +20,8 @@ const STATUS_COLOR = {
   cancelled:   '#ff6b6b',
 };
 
+const PRIORITY = { assigned: 0, accepted: 1, in_progress: 2 };
+
 // Buttons to show for each actionable status
 const RIDE_ACTIONS = {
   assigned:    [
@@ -74,18 +76,23 @@ export default function DriverRidesScreen() {
     );
   }
 
+  const sorted = [...rides].sort(
+    (a, b) => (PRIORITY[a.status] ?? 3) - (PRIORITY[b.status] ?? 3)
+  );
+
   return (
     <FlatList
       style={styles.container}
       contentContainerStyle={styles.content}
-      data={rides}
+      data={sorted}
       keyExtractor={item => String(item.id)}
-      renderItem={({ item }) => (
+      renderItem={({ item, index }) => (
         <RideCard
           ride={item}
           onAction={handleAction}
           isActioning={actioningId === item.id}
           anyActioning={actioningId !== null}
+          isTop={index === 0 && PRIORITY[item.status] !== undefined}
         />
       )}
       refreshing={refreshing}
@@ -96,12 +103,12 @@ export default function DriverRidesScreen() {
   );
 }
 
-function RideCard({ ride, onAction, isActioning, anyActioning }) {
+function RideCard({ ride, onAction, isActioning, anyActioning, isTop }) {
   const color = STATUS_COLOR[ride.status] ?? '#aab2cf';
   const actions = RIDE_ACTIONS[ride.status] ?? [];
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, isTop && { borderColor: color, borderWidth: 2 }]}>
       <View style={styles.routeRow}>
         <Text style={styles.routeText} numberOfLines={1}>{ride.pickup_text}</Text>
         <Text style={styles.arrow}>→</Text>
