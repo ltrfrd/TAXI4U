@@ -97,7 +97,19 @@ export default function DriverRidesScreen() {
       )}
       refreshing={refreshing}
       onRefresh={() => loadRides(true)}
-      ListHeaderComponent={error ? <Text style={styles.error}>{error}</Text> : null}
+      ListHeaderComponent={
+        <View>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <TouchableOpacity
+            style={[styles.refreshBtn, refreshing && { opacity: 0.5 }]}
+            onPress={() => loadRides(true)}
+            disabled={refreshing}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.refreshBtnText}>{refreshing ? 'Refreshing…' : '↻ Refresh'}</Text>
+          </TouchableOpacity>
+        </View>
+      }
       ListEmptyComponent={<Text style={styles.empty}>No rides assigned yet.</Text>}
     />
   );
@@ -258,6 +270,20 @@ const styles = StyleSheet.create({
   },
   btnDisabled: {
     opacity: 0.5,
+  },
+  refreshBtn: {
+    alignSelf: 'flex-end',
+    marginBottom: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#f5c518',
+  },
+  refreshBtnText: {
+    color: '#f5c518',
+    fontSize: 12,
+    fontWeight: '600',
   },
   btn_accept:   { backgroundColor: '#2ecc71' },
   btn_decline:  { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#ff6b6b' },
