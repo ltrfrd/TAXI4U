@@ -24,11 +24,8 @@ const PRIORITY = { assigned: 0, accepted: 1, in_progress: 2 };
 
 // Buttons to show for each actionable status
 const RIDE_ACTIONS = {
-  assigned:    [
-    { label: 'Accept',   action: 'accept',   variant: 'accept'  },
-    { label: 'Decline',  action: 'decline',  variant: 'decline' },
-  ],
-  accepted:    [{ label: 'Start Trip',    action: 'start',    variant: 'start'    }],
+  assigned:    [{ label: 'Accept',       action: 'accept',   variant: 'accept'   }],
+  accepted:    [{ label: 'Start Trip',   action: 'start',    variant: 'start'    }],
   in_progress: [{ label: 'Complete Trip', action: 'complete', variant: 'complete' }],
 };
 

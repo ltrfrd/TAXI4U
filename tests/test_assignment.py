@@ -344,3 +344,59 @@ def test_cancel_non_pending_ride_returns_400():
 def test_cancel_missing_ride_returns_404():
     r = client.post("/rides/99999/cancel")
     assert r.status_code == 404
+
+
+# ── decline → auto-reassignment ───────────────────────────────────────────────
+
+def _driver_with_token(email, lat, lon, *, status="available"):
+    """Create a driver + location and return (driver_id, jwt_token)."""
+    driver_id = _driver(email, lat, lon, status=status)
+    r = client.post("/driver/login", json={"email": email, "password": "x"})
+    assert r.status_code == 200
+    return driver_id, r.json()["access_token"]
+
+
+def _auth(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_decline_reassigns_to_other_available_driver():
+    # near driver declines; far driver should pick it up.
+    _, near_tok = _driver_with_token("near@t.com", 51.05, -114.0)
+    _driver("far@t.com", 51.20, -114.0)
+    ride_id = _ride(pickup_lat=51.04, pickup_lon=-114.0)
+
+    client.post(f"/rides/{ride_id}/auto-assign")
+
+    r = client.post(f"/driver/rides/{ride_id}/decline", headers=_auth(near_tok))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "assigned"
+    assert body["assigned_driver"]["email"] == "far@t.com"
+    assert body["assigned_at"] is not None
+
+
+def test_decline_stays_pending_when_no_other_drivers():
+    _, tok = _driver_with_token("solo@t.com", 51.05, -114.0)
+    ride_id = _ride(pickup_lat=51.04, pickup_lon=-114.0)
+
+    client.post(f"/rides/{ride_id}/auto-assign")
+
+    r = client.post(f"/driver/rides/{ride_id}/decline", headers=_auth(tok))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "pending"
+    assert body["assigned_driver"] is None
+
+
+def test_decline_does_not_reassign_to_declining_driver():
+    _, tok = _driver_with_token("only@t.com", 51.05, -114.0)
+    ride_id = _ride(pickup_lat=51.04, pickup_lon=-114.0)
+
+    client.post(f"/rides/{ride_id}/auto-assign")
+
+    r = client.post(f"/driver/rides/{ride_id}/decline", headers=_auth(tok))
+    body = r.json()
+    # Only one driver exists — must not reassign to themselves.
+    assert body["status"] == "pending"
+    assert body["assigned_driver"] is None

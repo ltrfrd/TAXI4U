@@ -12,12 +12,22 @@ from models.ride_request import RideRequest
 from schemas.ride_request import RideRequestOut
 from schemas.driver import DriverCreate, DriverLogin, DriverOut, DriverPublic, DriverStatus
 from schemas.driver_location import LocationOut, LocationUpdate
+from utils.assignment import find_nearest_driver
 from utils.auth import hash_password, verify_password
 from utils.jwt import create_access_token, verify_token
 
 router = APIRouter(prefix="/driver", tags=["driver"])
 
 _oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/driver/login")
+
+
+def _ride_out(ride: RideRequest, db: Session) -> dict:
+    out = RideRequestOut.model_validate(ride).model_dump()
+    if ride.driver_id:
+        driver = db.get(Driver, ride.driver_id)
+        if driver:
+            out["assigned_driver"] = DriverPublic.model_validate(driver).model_dump()
+    return out
 
 
 def get_current_driver(token: str = Depends(_oauth2_scheme), db: Session = Depends(get_db)) -> Driver:
@@ -153,7 +163,19 @@ def decline_ride(
     ride.assigned_at = None
     db.commit()
     db.refresh(ride)
-    return ride
+
+    if ride.pickup_lat is not None and ride.pickup_lon is not None:
+        next_driver = find_nearest_driver(
+            ride.pickup_lat, ride.pickup_lon, db, exclude_id=current_driver.id
+        )
+        if next_driver:
+            ride.driver_id = next_driver.id
+            ride.status = "assigned"
+            ride.assigned_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(ride)
+
+    return _ride_out(ride, db)
 
 
 @router.post("/rides/{ride_id}/start", response_model=RideRequestOut)
