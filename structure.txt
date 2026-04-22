@@ -1,97 +1,240 @@
 PROJECT: TAXI4U
-Last updated: 2026-04-17
+Last updated: 2026-04-19
 
 ---
 
 CURRENT STATE:
 - FastAPI backend operational
-- Zone fare matrix loaded from `fares.json` via absolute file path
-- Zone polygon data loaded from `backend/data/zones.json` via absolute file path
-- Geocoding via Nominatim, Canada-only, Cochrane-anchored for local inputs
+- Fare engine: zone matrix from fares.json, distance fallback at $2/km
+- Geocoding via Nominatim (Canada-only, Cochrane-anchored)
 - Routing via OSRM for live driving distance and duration
-- Coordinate passthrough supported from mobile autocomplete selections
+- Coordinate passthrough from mobile autocomplete selections
 - Three-tier zone detection: coords -> geocoded -> raw
-- React Native / Expo mobile app with autocomplete, fare display, and live zone map
+- SQLite database with Driver, DriverLocation, RideRequest tables
+- JWT-authenticated driver accounts (login, status, location, ride actions)
+- Ride booking with manual and auto (nearest-driver) assignment modes
+- Decline-triggered auto-reassignment (excluding declining driver)
+- React Native / Expo mobile app: customer fare+booking flow + driver ride workflow
 
 ---
 
-BACKEND FILES:
+BACKEND FILES (repo root):
 
   main.py
     FastAPI entry point.
-    Endpoints: GET /, GET /zones, POST /fare/calculate, GET /fare/test.
-    Handles input validation, coordinate passthrough, route lookup, zone detection,
-    response assembly, and graceful fallback behavior.
+    Registers routers, creates DB tables, runs idempotent column migrations.
+    Endpoints: GET /, GET /zones, GET /fare/test, POST /fare/calculate.
+    Handles input validation, coordinate passthrough, geocoding, routing,
+    zone detection, fare selection, and graceful fallback behavior.
 
   calculator.py
-    Zone fare via fares.json matrix lookup + distance fare at $2/km.
+    Zone fare via fares.json matrix lookup.
+    Distance fare at $2/km.
     Loads fares.json using Path(__file__).resolve().parent / "fares.json".
 
   zone_mapper.py
     Keyword + coordinate-based zone detection.
-    Loads polygon data from backend/data/zones.json at startup and derives
-    boundary checks from the polygon data.
+    Loads polygon data from backend/data/zones.json at startup.
+    Bounding-box checks with inward buffer; priority ordering for overlapping zones.
 
   geocoder.py
     Nominatim geocoding with Canada-only restriction and light input normalization.
+    Three-step fallback: Cochrane-anchored -> Alberta -> raw (all Canada-only).
 
   routing.py
-    OSRM driving distance and duration between two coordinate points.
+    OSRM driving distance (km) and duration (min) between two coordinate points.
+
+  database.py
+    SQLAlchemy engine (SQLite taxi4u.db), SessionLocal, Base, get_db() dependency.
+
+  config.py
+    Nominatim and OSRM base URLs.
 
   fares.json
-    Source of truth for pricing.
+    Source of truth for zone-based pricing matrix.
+
+  pytest.ini
+    Sets pythonpath = . so pytest finds top-level modules without manual PYTHONPATH.
 
   backend/data/zones.json
-    Source of truth for zone polygons, priorities, and colors.
+    Source of truth for zone polygon boundaries, priorities, and display colors.
+
+---
+
+MODELS (models/):
+
+  driver.py
+    Driver table: id, name, email, password_hash, phone, is_active, status, created_at.
+    status values: offline | available | busy.
+
+  driver_location.py
+    DriverLocation table: driver_id (FK, unique), latitude, longitude, updated_at.
+    One row per driver; upserted on each location update.
+
+  ride_request.py
+    RideRequest table: pickup/dropoff text and coords, fare_amount, status,
+    driver_id (FK), created_by_id (FK), assigned_at, created_at.
+    status values: pending | assigned | accepted | in_progress | completed | cancelled.
+
+---
+
+SCHEMAS (schemas/):
+
+  driver.py
+    DriverCreate, DriverLogin — request bodies.
+    DriverOut — full profile response (includes created_at, is_active).
+    DriverPublic — safe subset for ride responses (name, email, phone, status).
+    DriverStatus — status update body (offline | available | busy).
+
+  driver_location.py
+    LocationUpdate — latitude/longitude input.
+    LocationOut — latitude, longitude, updated_at.
+
+  ride_request.py
+    RideRequestCreate — ride creation body; includes optional assignment_mode field.
+    AssignRideRequest — manual assignment body (driver_email).
+    RideRequestOut — ride response; includes assigned_driver: dict | None.
+
+---
+
+ROUTERS (routers/):
+
+  rides.py
+    POST /rides/             Create ride; auto-assigns if assignment_mode="auto".
+    GET  /rides/             List all rides.
+    GET  /rides/me/latest    Latest ride created by the authenticated caller.
+    GET  /rides/{id}         Single ride by ID.
+    POST /rides/{id}/assign       Manual assign by driver email.
+    POST /rides/{id}/auto-assign  Nearest available driver auto-assign.
+    POST /rides/{id}/cancel       Cancel a pending ride.
+
+  driver.py
+    POST /driver/login              Authenticate; returns JWT bearer token.
+    GET  /driver/available          List active + available drivers.
+    GET  /driver/me                 Authenticated driver's profile.
+    GET  /driver/status             Current status.
+    POST /driver/status             Update status.
+    POST /driver/location           Upsert GPS coordinates.
+    GET  /driver/location/me        Retrieve stored location.
+    GET  /driver/rides              Rides assigned to this driver.
+    POST /driver/rides/{id}/accept   assigned -> accepted.
+    POST /driver/rides/{id}/decline  assigned -> pending (+ auto-reassign excluding decliner).
+    POST /driver/rides/{id}/start    accepted -> in_progress.
+    POST /driver/rides/{id}/complete in_progress -> completed.
+    POST /driver/dev/create          Create driver account (dev only).
+
+---
+
+UTILS (utils/):
+
+  assignment.py
+    find_nearest_driver(pickup_lat, pickup_lon, db, exclude_id=None)
+    Queries active+available drivers with a DriverLocation row.
+    Sorts by squared Euclidean distance; ties broken by lower driver id.
+    exclude_id filters out the declining driver during reassignment.
+
+  auth.py
+    hash_password() and verify_password() via bcrypt.
+
+  jwt.py
+    create_access_token() and verify_token() using python-jose (HS256, 24 h expiry).
+    sub claim stores driver id as string.
+
+---
+
+TESTS (tests/):
+
+  test_assignment.py
+    29 tests covering: _dist unit, manual assign (success + error paths),
+    auto-assign (nearest, shape, tie-breaker, error paths, candidate filtering),
+    create-time assignment_mode, cancel, and decline auto-reassignment.
+    Uses in-memory SQLite via StaticPool; FastAPI dependency_overrides for get_db.
 
 ---
 
 MOBILE FILES (taxi4u-mobile/):
 
   App.js
-    Entry point. Mounts AppNavigator.
+    Expo entry point. Mounts AppNavigator.
 
   app.json
     Expo config.
-    Foreground location enabled for the live map.
+    Foreground location enabled.
     Background location explicitly disabled:
     - isAndroidBackgroundLocationEnabled: false
     - isIosBackgroundLocationEnabled: false
 
   package.json
-    Expo 54 app with react-navigation, react-native-maps, expo-location, expo-asset.
+    Expo SDK 54 app with react-navigation, react-native-maps, expo-location,
+    expo-secure-store, expo-asset.
 
   src/config.js
-    API_BASE. Update to the local machine IP before running on device.
+    API_BASE. Update to local machine IPv4 before running on a physical device.
+
+  src/context/AuthContext.js
+    Stores JWT in expo-secure-store.
+    Provides token, login(), logout(), and loading state to the whole app.
 
   src/navigation/AppNavigator.js
-    Stack flow: Home -> Result -> Map
+    Auth-gated stack navigator.
+    Unauthenticated: DriverLogin only.
+    Authenticated: Home, Result, Map, DriverProfile, DriverRides.
+
+  src/screens/DriverLoginScreen.js
+    Email/password form. On success, calls AuthContext.login() with the JWT.
+
+  src/screens/DriverProfileScreen.js
+    Displays profile info from GET /driver/me.
+    Status toggle (offline/available/busy) via POST /driver/status.
+    Location share button via POST /driver/location.
+    Navigate to DriverRides. Logout.
+
+  src/screens/DriverRidesScreen.js
+    Lists driver's rides from GET /driver/rides.
+    Sorted by status priority: assigned -> accepted -> in_progress -> other.
+    Top actionable ride highlighted with a colored border.
+    Accept / Decline buttons on assigned rides.
+    Start Trip on accepted, Complete Trip on in_progress.
+    Refreshes on screen focus; pull-to-refresh; manual refresh button.
 
   src/screens/HomeScreen.js
-    Address input with direct-to-Nominatim autocomplete.
-    Selected suggestions preserve lat/lon.
-    Manual edits clear saved coords.
+    GPS auto-detects pickup on mount via expo-location + reverseGeocode().
+    Both pickup and dropoff support Nominatim autocomplete (debounced 400 ms).
+    Selected suggestions preserve lat/lon; manual edits clear saved coords.
+    "Calculate Fare" -> navigates to ResultScreen with fare result.
+    Last ride card (from GET /rides/me/latest) tappable to ResultScreen.
 
   src/screens/ResultScreen.js
-    Fare result display and entry point to the live map.
+    Dual-mode: fare-estimate mode (result present) and ride-view mode (existingRide only).
+    Fare estimate: zone/distance breakdown, route info, fare breakdown.
+    "Book Ride" -> POST /rides/ with assignment_mode="auto"; shows ride status on success.
+    Refresh Status button polls GET /rides/{id} while ride is active.
+    Cancel Ride button available while status is pending.
+    "Open Live Map" -> MapScreen (fare-estimate mode only).
 
   src/screens/MapScreen.js
-    Fetches zones from backend /zones.
-    Draws polygons and tracks live foreground driver location.
+    Fetches zone polygons from GET /zones via src/data/zones.js.
+    Renders polygons with react-native-maps.
+    Tracks foreground GPS via expo-location.
+    Shows pickup/dropoff markers and driver backend location marker.
+    On-device point-in-polygon zone detection (src/utils/zoneDetection.js).
 
   src/services/api.js
-    calculateFare()
-    fetchZones()
-    searchAddresses()
+    calculateFare(), fetchZones(), searchAddresses(), reverseGeocode()
+    loginDriver(), getDriverProfile(), updateDriverStatus()
+    updateDriverLocation(), getMyLocation()
+    createRide(), getMyLatestRide(), getRideById(), cancelRide()
+    getDriverRides(), rideAction()
+    authFetch() helper attaches Bearer token to protected requests.
 
   src/services/backgroundLocation.js
     Stub only. Background tracking not implemented.
 
   src/data/zones.js
-    Thin wrapper around fetchZones() with sorting and normalization.
+    Thin wrapper around fetchZones() with sorting and normalization for the map.
 
   src/utils/zoneDetection.js
-    Point-in-polygon detection on-device.
+    On-device point-in-polygon detection used by MapScreen.
 
 ---
 
@@ -100,6 +243,9 @@ RUN BACKEND:
   venv\Scripts\activate
   python -m uvicorn main:app --reload --host 0.0.0.0 --port 8001
 
+RUN TESTS:
+  python -m pytest
+
 RUN MOBILE:
   cd TAXI4U/taxi4u-mobile
   npm install
@@ -107,5 +253,6 @@ RUN MOBILE:
 
 NOTE:
   Backend data loading does not depend on running from repo root.
-  `fares.json` and `backend/data/zones.json` are both loaded via absolute
+  fares.json and backend/data/zones.json are loaded via absolute
   file paths derived from the Python source files.
+  pytest.ini sets pythonpath=. — no manual PYTHONPATH needed.

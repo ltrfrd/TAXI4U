@@ -12,8 +12,6 @@ import requests
 
 from config import NOMINATIM_HEADERS, NOMINATIM_URL
 
-HEADERS = NOMINATIM_HEADERS
-
 _cache: dict[str, dict | None] = {}
 
 # Words that signal the query already carries geographic context.
@@ -70,7 +68,9 @@ def _fetch(query: str) -> dict | None:
     params = {"q": query, "format": "json", "limit": 1, "countrycodes": "ca"}
     result = None
     try:
-        response = requests.get(NOMINATIM_URL, params=params, headers=HEADERS, timeout=6)
+        response = requests.get(
+            NOMINATIM_URL, params=params, headers=NOMINATIM_HEADERS, timeout=6
+        )
         response.raise_for_status()
         hits = response.json()
         if hits:

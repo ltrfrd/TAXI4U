@@ -283,7 +283,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   btn_accept:   { backgroundColor: '#2ecc71' },
-  btn_decline:  { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#ff6b6b' },
   btn_start:    { backgroundColor: '#f5c518' },
   btn_complete: { backgroundColor: '#2ecc71' },
 });

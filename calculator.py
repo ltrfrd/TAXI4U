@@ -71,7 +71,6 @@ def prepare_trip_data(
         "dropoff_matches": dropoff_matches or [],
         "extra_stops": extra_stops,
         "wait_minutes": wait_minutes,
-        "ready_for_confirmation": True,
     }
 
     if distance_km is not None:
@@ -132,14 +131,3 @@ def validate_trip_data(trip_data):
         "valid": True,
         "message": "Trip data is valid",
     }
-# -----------------------------------------------------------
-# - Confirm trip data
-# - Pass confirmed trip details into fare calculation
-# -----------------------------------------------------------
-def confirm_and_calculate(trip_data):
-    return calculate_fare(
-        trip_data["pickup_zone"],
-        trip_data["dropoff_zone"],
-        extra_stops=trip_data["extra_stops"],
-        wait_minutes=trip_data["wait_minutes"],
-    )

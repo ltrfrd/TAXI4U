@@ -1,55 +1,58 @@
 # TAXI4U
 
-A fare calculation system for taxi dispatch in Cochrane, AB. A FastAPI backend accepts address input or GPS coordinates, geocodes when needed, fetches live driving distance, and returns a fare based on zone pricing or a per-km distance fallback. A React Native / Expo mobile app provides autocomplete address input, fare display, and a live driver map with real-time zone detection.
+TAXI4U is a fare calculation and ride workflow MVP for taxi dispatch in Cochrane, AB. The FastAPI backend handles fare estimation, ride booking, and driver dispatch. A React Native / Expo mobile app covers both the customer flow (estimate, book, track) and the driver flow (login, status, accept and complete trips).
 
 ---
 
 ## Architecture
 
 ```
-Mobile App (Expo / React Native)
+Customer Mobile App
     |
     |-- HomeScreen
-    |     Autocomplete -> Nominatim (Canada-only, direct from app)
-    |     Tapped suggestion stores lat/lon in selection state
-    |     "Calculate Fare" sends pickup + dropoff text
-    |     + optional pickup_coords / dropoff_coords if a suggestion was selected
+    |     GPS auto-detects pickup on mount (editable)
+    |     Nominatim autocomplete for both pickup and dropoff
+    |     "Calculate Fare" -> POST /fare/calculate
+    |     Last ride card (tappable, links to status view)
     |
     |-- ResultScreen
-    |     Displays fare, zones, route info
-    |     "Open Live Map" button
+    |     Fare estimate display (zone or distance)
+    |     "Book Ride" -> POST /rides/ (auto-assignment mode)
+    |     Live ride status with Refresh and Cancel buttons
     |
     `-- MapScreen
-          Fetches zone polygons from backend /zones
+          Fetches zone polygons from GET /zones
           Live GPS tracking via expo-location
           Point-in-polygon detection runs on-device
           Shows pickup/dropoff markers + driver marker
 
-Backend (FastAPI)
+Driver Mobile App (same app, driver login gates the flow)
     |
-    |-- Input Validation
-    |     Reject empty, all-punctuation, single-character inputs early
+    |-- DriverLoginScreen
+    |     Authenticates via POST /driver/login (JWT)
     |
-    |-- Coordinate Passthrough
-    |     If pickup_coords / dropoff_coords are provided -> skip geocoding
-    |     Use provided lat/lon directly
+    |-- DriverProfileScreen
+    |     View profile, toggle status (offline/available/busy)
+    |     One-tap location share -> POST /driver/location
     |
-    |-- Geocoding - Nominatim (OpenStreetMap)
-    |     Only runs if no coordinates were provided
-    |     Canada-only (countrycodes=ca)
-    |     Cochrane-anchored for local/ambiguous inputs
+    `-- DriverRidesScreen
+          Lists assigned rides, sorted by urgency
+          Accept / Decline / Start Trip / Complete Trip actions
+
+Backend (FastAPI, repo root)
     |
-    |-- Routing - OSRM
-    |     Real driving distance (km) and duration (min) between the two points
+    |-- Fare engine (calculator.py, zone_mapper.py, geocoder.py, routing.py)
+    |     Zone fare from fares.json matrix, or distance fare ($2/km)
     |
-    |-- Zone Detection
-    |     1. Coordinate -> polygon boundary check (zones.json, high confidence)
-    |     2. Geocoded display_name -> keyword match (medium confidence)
-    |     3. Raw input text -> keyword match (low confidence, geocoding failed)
+    |-- Ride system (routers/rides.py)
+    |     Create, list, assign, auto-assign, cancel
     |
-    `-- Fare Decision
-          Both zones in fare chart  -> zone fare     (fares.json matrix lookup)
-          Either zone not in chart  -> distance fare ($2 x route km)
+    |-- Driver system (routers/driver.py)
+    |     Auth, status, location, ride lifecycle actions
+    |
+    `-- Assignment (utils/assignment.py)
+          Finds nearest available driver by Euclidean distance
+          Decline triggers auto-reassignment to next nearest (excluding decliner)
 ```
 
 ---
@@ -155,7 +158,92 @@ Polygon zone definitions live in `backend/data/zones.json`. Coordinate-based det
 
 ---
 
+## Ride System
+
+### Ride Lifecycle
+
+```
+pending -> assigned -> accepted -> in_progress -> completed
+       \
+        -> cancelled  (from pending only)
+```
+
+A ride starts as `pending`. Assignment (manual or auto) moves it to `assigned`. The driver accepts it (`accepted`), starts the trip (`in_progress`), and completes it (`completed`). A `pending` ride can be cancelled by the customer.
+
+### Assignment Logic
+
+**Manual assignment** (`POST /rides/{id}/assign`): a driver is specified by email. Driver must be active and `available`.
+
+**Auto-assignment** (`POST /rides/{id}/auto-assign`, or `assignment_mode: "auto"` on ride creation): picks the nearest active `available` driver by straight-line distance from the pickup coordinates. Ties break by lower driver ID.
+
+**Decline and reassignment**: when a driver declines an `assigned` ride, the ride resets to `pending`, then the system immediately tries to assign the next nearest available driver, excluding the one who declined. If no other driver is available, the ride stays `pending`.
+
+---
+
+## Customer Mobile Workflow
+
+1. App opens → pickup field auto-populated from GPS (editable).
+2. User types or selects dropoff via autocomplete.
+3. "Calculate Fare" → fare estimate screen with zone/distance breakdown.
+4. "Book Ride" → creates ride with auto-assignment; assigned driver shown if found.
+5. Refresh Status button polls current ride state.
+6. Cancel button available while ride is `pending`.
+7. Home screen shows a tappable last-ride card for quick status check.
+
+---
+
+## Driver Mobile Workflow
+
+1. Driver logs in with email and password (JWT stored securely).
+2. Driver Profile screen: view account info, set status to `available`, share GPS location.
+3. My Rides screen: lists all rides assigned to this driver, sorted by urgency.
+4. `assigned` ride → Accept or Decline buttons.
+5. `accepted` ride → Start Trip button.
+6. `in_progress` ride → Complete Trip button.
+7. Screen refreshes on focus and supports pull-to-refresh and a manual refresh button.
+
+---
+
 ## API Endpoints
+
+### Fare
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/` | Health check |
+| `GET` | `/zones` | All zone polygon definitions for the mobile map |
+| `GET` | `/fare/test` | Fixed fare smoke test using hard-coded zones |
+| `POST` | `/fare/calculate` | Calculate fare from two address/coord inputs |
+
+### Rides
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/rides/` | Create a ride; `assignment_mode: "auto"` triggers immediate nearest-driver assignment |
+| `GET` | `/rides/` | List all rides |
+| `GET` | `/rides/me/latest` | Latest ride created by the authenticated user |
+| `GET` | `/rides/{id}` | Get a single ride by ID |
+| `POST` | `/rides/{id}/assign` | Manually assign a driver by email |
+| `POST` | `/rides/{id}/auto-assign` | Auto-assign the nearest available driver |
+| `POST` | `/rides/{id}/cancel` | Cancel a pending ride |
+
+### Drivers
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/driver/login` | Authenticate; returns JWT bearer token |
+| `GET` | `/driver/available` | List all active, available drivers |
+| `GET` | `/driver/me` | Authenticated driver's profile |
+| `GET` | `/driver/status` | Current driver status |
+| `POST` | `/driver/status` | Update status (`offline` / `available` / `busy`) |
+| `POST` | `/driver/location` | Update driver's GPS coordinates |
+| `GET` | `/driver/location/me` | Retrieve stored driver location |
+| `GET` | `/driver/rides` | Rides assigned to the authenticated driver |
+| `POST` | `/driver/rides/{id}/accept` | Accept an assigned ride |
+| `POST` | `/driver/rides/{id}/decline` | Decline an assigned ride; triggers reassignment |
+| `POST` | `/driver/rides/{id}/start` | Start an accepted ride |
+| `POST` | `/driver/rides/{id}/complete` | Complete an in-progress ride |
+| `POST` | `/driver/dev/create` | Create a driver account (dev only) |
 
 ### `GET /`
 
@@ -296,34 +384,59 @@ Calculate a fare from two location inputs.
 
 ```text
 TAXI4U/
-├── main.py
-├── calculator.py
-├── zone_mapper.py
-├── geocoder.py
-├── routing.py
-├── fares.json
+├── main.py                 FastAPI entry point; fare endpoints; DB table creation and migrations
+├── calculator.py           Zone fare (fares.json matrix) and distance fare ($2/km)
+├── zone_mapper.py          Zone detection: coordinate polygon check, keyword match
+├── geocoder.py             Nominatim geocoding, Canada-only, Cochrane-anchored
+├── routing.py              OSRM driving distance and duration
+├── database.py             SQLAlchemy engine, session factory, Base, get_db()
+├── config.py               Nominatim and OSRM base URLs
+├── fares.json              Fare matrix — source of truth for zone pricing
+├── pytest.ini              Sets pythonpath=. so pytest finds top-level modules
 ├── backend/
 │   └── data/
-│       └── zones.json
+│       └── zones.json      Zone polygon definitions — source of truth for map and detection
+├── models/
+│   ├── driver.py           Driver ORM model (id, name, email, status, is_active, ...)
+│   ├── driver_location.py  DriverLocation ORM model (driver_id, latitude, longitude)
+│   └── ride_request.py     RideRequest ORM model (status, driver_id, created_by_id, ...)
+├── schemas/
+│   ├── driver.py           DriverCreate, DriverLogin, DriverOut, DriverPublic, DriverStatus
+│   ├── driver_location.py  LocationUpdate, LocationOut
+│   └── ride_request.py     RideRequestCreate, RideRequestOut, AssignRideRequest
+├── routers/
+│   ├── driver.py           All /driver/* endpoints; get_current_driver() JWT dependency
+│   └── rides.py            All /rides/* endpoints
+├── utils/
+│   ├── assignment.py       find_nearest_driver() — nearest available driver by Euclidean distance
+│   ├── auth.py             bcrypt password hashing and verification
+│   └── jwt.py              JWT create/verify (HS256, 24 h expiry)
+├── tests/
+│   └── test_assignment.py  29 tests: manual assign, auto-assign, cancel, decline/reassign
 └── taxi4u-mobile/
-    ├── App.js
-    ├── app.json
-    ├── package.json
+    ├── App.js              Expo entry point
+    ├── app.json            Expo config (background location explicitly disabled)
+    ├── package.json        Expo SDK 54, react-navigation, react-native-maps, expo-location
     └── src/
-        ├── config.js
+        ├── config.js                       API_BASE — update to local machine IP before running
+        ├── context/
+        │   └── AuthContext.js              JWT storage; login/logout; token passed to all screens
         ├── navigation/
-        │   └── AppNavigator.js
+        │   └── AppNavigator.js             Auth-gated stack navigator
         ├── screens/
-        │   ├── HomeScreen.js
-        │   ├── ResultScreen.js
-        │   └── MapScreen.js
+        │   ├── DriverLoginScreen.js        Driver email/password login form
+        │   ├── DriverProfileScreen.js      Profile view, status toggle, location share, logout
+        │   ├── DriverRidesScreen.js        Driver rides list with Accept/Decline/Start/Complete
+        │   ├── HomeScreen.js               Fare estimate entry, GPS pickup, last ride card
+        │   ├── MapScreen.js                Live zone map with GPS tracking and markers
+        │   └── ResultScreen.js             Fare display, booking, status refresh, cancel
         ├── services/
-        │   ├── api.js
-        │   └── backgroundLocation.js
+        │   ├── api.js                      All API calls: fare, rides, driver auth, location
+        │   └── backgroundLocation.js       Stub only — background tracking not implemented
         ├── data/
-        │   └── zones.js
+        │   └── zones.js                    Fetches and normalizes zone polygons for the map
         └── utils/
-            └── zoneDetection.js
+            └── zoneDetection.js            On-device point-in-polygon detection
 ```
 
 ---
@@ -336,7 +449,11 @@ TAXI4U/
 |---|---|
 | API framework | FastAPI |
 | ASGI server | Uvicorn |
-| Geocoding | Nominatim |
+| ORM | SQLAlchemy 2.x |
+| Database | SQLite (`taxi4u.db`) |
+| Auth | JWT via python-jose (HS256, 24 h tokens) |
+| Password hashing | bcrypt |
+| Geocoding | Nominatim (OpenStreetMap) |
 | Routing | OSRM public API |
 | Zone data | `backend/data/zones.json` |
 | Fare data | `fares.json` |
@@ -361,11 +478,19 @@ TAXI4U/
 cd TAXI4U
 python -m venv venv
 venv\Scripts\activate
-pip install fastapi uvicorn requests
+pip install fastapi uvicorn sqlalchemy "python-jose[cryptography]" bcrypt requests pytest
 python -m uvicorn main:app --reload --host 0.0.0.0 --port 8001
 ```
 
-The backend reads both `fares.json` and `backend/data/zones.json` via file-based absolute paths derived from the Python source files, so those loads do not depend on the current working directory.
+The backend reads `fares.json` and `backend/data/zones.json` via absolute paths derived from the Python source files, so those loads work regardless of the current working directory.
+
+### Tests
+
+```bash
+python -m pytest
+```
+
+`pytest.ini` sets `pythonpath = .` so no manual `PYTHONPATH` setup is needed.
 
 ### Mobile
 
@@ -375,14 +500,19 @@ npm install
 npx expo start
 ```
 
-Update `API_BASE` in `taxi4u-mobile/src/config.js` to your machine's local IP address before running.
+Update `API_BASE` in `taxi4u-mobile/src/config.js` to your machine's local IP address before running on a physical device. `localhost` does not work from a device.
 
 ---
 
-## Notes and Limitations
+## Current Limitations
 
+- No payment system. Fares are estimates only; no charge is collected.
+- No cancellation fees.
+- No push notifications. Drivers and customers must manually refresh to see status changes.
+- No WebSockets or live tracking. Ride state is polled on demand.
+- Background location tracking is not implemented (stub only).
+- No dispatcher web UI. Assignment is triggered via the API or the mobile booking flow.
+- Zone keyword coverage is narrower than polygon coverage; coordinate-based detection is more reliable than free-form text input.
 - The public Nominatim API is rate-limited and intended for low-volume use.
 - The public OSRM endpoint is a demo service and not production-grade.
-- Zone keyword coverage is still narrower than polygon coverage, so coordinate-based detection is more reliable than free-form text matching.
-- If geocoding or routing fails, `/fare/calculate` still returns a response and distance fare uses the 10 km fallback when needed.
-- Background location tracking is intentionally not implemented yet.
+- If geocoding or routing fails, `/fare/calculate` still returns a response; distance fare uses the 10 km fallback when needed.

@@ -1,5 +1,3 @@
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
@@ -7,10 +5,10 @@ from database import get_db
 from models.driver import Driver
 from models.ride_request import RideRequest
 from routers.driver import get_current_driver
-from schemas.driver import DriverPublic
 from schemas.ride_request import AssignRideRequest, RideRequestCreate, RideRequestOut
 from utils.assignment import find_nearest_driver
 from utils.jwt import verify_token
+from utils.ride_helpers import _do_assign, _ride_out
 
 router = APIRouter(prefix="/rides", tags=["rides"])
 
@@ -24,25 +22,6 @@ def _optional_driver_id(request: Request) -> int | None:
         return int(verify_token(auth[7:])["sub"])
     except Exception:
         return None
-
-
-def _do_assign(ride: RideRequest, driver: Driver, db: Session) -> None:
-    ride.driver_id = driver.id
-    ride.status = "assigned"
-    ride.assigned_at = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(ride)
-
-
-def _ride_out(ride: RideRequest, db: Session) -> dict:
-    out = RideRequestOut.model_validate(ride).model_dump()
-    if ride.driver_id:
-        driver = db.get(Driver, ride.driver_id)
-        if driver:
-            out["assigned_driver"] = DriverPublic.model_validate(driver).model_dump()
-    return out
-
-
 @router.post("/", response_model=RideRequestOut, status_code=201)
 def create_ride(payload: RideRequestCreate, request: Request, db: Session = Depends(get_db)):
     ride_data = payload.model_dump(exclude={"assignment_mode"})

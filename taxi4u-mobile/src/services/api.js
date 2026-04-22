@@ -18,7 +18,8 @@ export async function calculateFare(pickup, dropoff, options = {}) {
   });
 
   if (!response.ok) {
-    throw new Error(`Server returned ${response.status}. Check the backend is running.`);
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Fare calculation failed (${response.status})`);
   }
 
   return response.json();
@@ -217,7 +218,6 @@ export async function searchAddresses(query, signal) {
     const hits = await res.json();
     return hits.map(r => ({
       label: _formatLabel(r),
-      value: r.display_name,
       lat: Number(r.lat),
       lon: Number(r.lon),
       display_name: r.display_name,

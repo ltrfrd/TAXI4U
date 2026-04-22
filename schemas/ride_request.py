@@ -30,7 +30,7 @@ class RideRequestOut(BaseModel):
     dropoff_lat: float | None
     dropoff_lon: float | None
     fare_amount: float | None
-    status: str
+    status: RideStatus
     assigned_at: datetime | None
     assigned_driver: dict | None = None
     created_at: datetime

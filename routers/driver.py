@@ -1,38 +1,34 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy.orm import Session
 
+from config import TAXI4U_DEV
 from database import get_db
 from models.driver import Driver
 from models.driver_location import DriverLocation
 from models.ride_request import RideRequest
 from schemas.ride_request import RideRequestOut
-from schemas.driver import DriverCreate, DriverLogin, DriverOut, DriverPublic, DriverStatus
+from schemas.driver import DriverCreate, DriverLogin, DriverOut, DriverStatus
 from schemas.driver_location import LocationOut, LocationUpdate
 from utils.assignment import find_nearest_driver
 from utils.auth import hash_password, verify_password
 from utils.jwt import create_access_token, verify_token
+from utils.ride_helpers import _do_assign, _ride_out
 
 router = APIRouter(prefix="/driver", tags=["driver"])
 
-_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/driver/login")
+_bearer_scheme = HTTPBearer()
 
 
-def _ride_out(ride: RideRequest, db: Session) -> dict:
-    out = RideRequestOut.model_validate(ride).model_dump()
-    if ride.driver_id:
-        driver = db.get(Driver, ride.driver_id)
-        if driver:
-            out["assigned_driver"] = DriverPublic.model_validate(driver).model_dump()
-    return out
-
-
-def get_current_driver(token: str = Depends(_oauth2_scheme), db: Session = Depends(get_db)) -> Driver:
+def get_current_driver(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme),
+    db: Session = Depends(get_db),
+) -> Driver:
     try:
-        payload = verify_token(token)
+        payload = verify_token(credentials.credentials)
         driver_id: int = int(payload["sub"])
     except (JWTError, KeyError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
@@ -71,11 +67,6 @@ def list_available_drivers(db: Session = Depends(get_db)):
 @router.get("/me")
 def driver_me(current_driver: Driver = Depends(get_current_driver)):
     return DriverOut.model_validate(current_driver).model_dump()
-
-
-@router.get("/status")
-def get_status(current_driver: Driver = Depends(get_current_driver)):
-    return {"status": current_driver.status}
 
 
 @router.post("/status")
@@ -117,12 +108,13 @@ def driver_rides(
     current_driver: Driver = Depends(get_current_driver),
     db: Session = Depends(get_db),
 ):
-    return (
+    rides = (
         db.query(RideRequest)
         .filter(RideRequest.driver_id == current_driver.id)
         .order_by(RideRequest.created_at.desc())
         .all()
     )
+    return [_ride_out(r, db) for r in rides]
 
 
 def _get_owned_ride(ride_id: int, driver: Driver, db: Session) -> RideRequest:
@@ -146,7 +138,7 @@ def accept_ride(
     ride.status = "accepted"
     db.commit()
     db.refresh(ride)
-    return ride
+    return _ride_out(ride, db)
 
 
 @router.post("/rides/{ride_id}/decline", response_model=RideRequestOut)
@@ -169,11 +161,7 @@ def decline_ride(
             ride.pickup_lat, ride.pickup_lon, db, exclude_id=current_driver.id
         )
         if next_driver:
-            ride.driver_id = next_driver.id
-            ride.status = "assigned"
-            ride.assigned_at = datetime.now(timezone.utc)
-            db.commit()
-            db.refresh(ride)
+            _do_assign(ride, next_driver, db)
 
     return _ride_out(ride, db)
 
@@ -190,7 +178,7 @@ def start_ride(
     ride.status = "in_progress"
     db.commit()
     db.refresh(ride)
-    return ride
+    return _ride_out(ride, db)
 
 
 @router.post("/rides/{ride_id}/complete", response_model=RideRequestOut)
@@ -205,7 +193,7 @@ def complete_ride(
     ride.status = "completed"
     db.commit()
     db.refresh(ride)
-    return ride
+    return _ride_out(ride, db)
 
 
 @router.get("/location/me")
@@ -222,6 +210,9 @@ def get_my_location(
 # DEV ONLY — remove or gate behind env flag before production
 @router.post("/dev/create", tags=["dev"])
 def dev_create_driver(payload: DriverCreate, db: Session = Depends(get_db)):
+    if not TAXI4U_DEV:
+        raise HTTPException(status_code=404, detail="Not found")
+
     if db.query(Driver).filter(Driver.email == payload.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
 
