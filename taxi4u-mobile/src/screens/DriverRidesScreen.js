@@ -24,7 +24,10 @@ const PRIORITY = { assigned: 0, accepted: 1, in_progress: 2 };
 
 // Buttons to show for each actionable status
 const RIDE_ACTIONS = {
-  assigned:    [{ label: 'Accept',       action: 'accept',   variant: 'accept'   }],
+  assigned:    [
+    { label: 'Accept',  action: 'accept',  variant: 'accept'  },
+    { label: 'Decline', action: 'decline', variant: 'decline' },
+  ],
   accepted:    [{ label: 'Start Trip',   action: 'start',    variant: 'start'    }],
   in_progress: [{ label: 'Complete Trip', action: 'complete', variant: 'complete' }],
 };
@@ -283,6 +286,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   btn_accept:   { backgroundColor: '#2ecc71' },
+  btn_decline:  { backgroundColor: '#ff6b6b' },
   btn_start:    { backgroundColor: '#f5c518' },
   btn_complete: { backgroundColor: '#2ecc71' },
 });

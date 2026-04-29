@@ -1,8 +1,6 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError
 from sqlalchemy.orm import Session
 
 from config import TAXI4U_DEV
@@ -11,34 +9,15 @@ from models.driver import Driver
 from models.driver_location import DriverLocation
 from models.ride_request import RideRequest
 from schemas.ride_request import RideRequestOut
-from schemas.driver import DriverCreate, DriverLogin, DriverOut, DriverStatus
+from schemas.driver import DriverCreate, DriverLogin, DriverOut, DriverPublic, DriverStatus
 from schemas.driver_location import LocationOut, LocationUpdate
 from utils.assignment import find_nearest_driver
 from utils.auth import hash_password, verify_password
-from utils.jwt import create_access_token, verify_token
+from utils.deps import get_current_driver
+from utils.jwt import create_access_token
 from utils.ride_helpers import _do_assign, _ride_out
 
 router = APIRouter(prefix="/driver", tags=["driver"])
-
-_bearer_scheme = HTTPBearer()
-
-
-def get_current_driver(
-    credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme),
-    db: Session = Depends(get_db),
-) -> Driver:
-    try:
-        payload = verify_token(credentials.credentials)
-        driver_id: int = int(payload["sub"])
-    except (JWTError, KeyError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-
-    driver = db.get(Driver, driver_id)
-    if not driver or not driver.is_active:
-        raise HTTPException(status_code=401, detail="Driver not found or inactive")
-
-    return driver
-
 
 @router.post("/login")
 def driver_login(payload: DriverLogin, db: Session = Depends(get_db)):

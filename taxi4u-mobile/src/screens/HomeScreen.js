@@ -230,6 +230,14 @@ export default function HomeScreen({ navigation }) {
             <Text style={styles.lastRideStatus}>{lastRide.status.replace('_', ' ')}</Text>
           </TouchableOpacity>
         ) : null}
+
+        <TouchableOpacity
+          style={styles.dispatcherButton}
+          onPress={() => navigation.navigate('DispatcherManualRide')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.dispatcherButtonText}>Manual Dispatcher Booking</Text>
+        </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );
@@ -377,5 +385,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#aab2cf',
     textTransform: 'capitalize',
+  },
+  dispatcherButton: {
+    marginTop: 12,
+    backgroundColor: '#16213e',
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#f5c518',
+  },
+  dispatcherButtonText: {
+    color: '#f5c518',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

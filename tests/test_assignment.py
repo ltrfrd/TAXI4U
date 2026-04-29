@@ -125,10 +125,10 @@ def test_dist_ordering():
 # ── manual assign: contract unchanged ────────────────────────────────────────
 
 def test_manual_assign_success():
-    _driver("d@t.com", 51.0, -114.0)
+    _, tok = _driver_with_token("d@t.com", 51.0, -114.0)
     ride_id = _ride()
 
-    r = client.post(f"/rides/{ride_id}/assign", json={"driver_email": "d@t.com"})
+    r = client.post(f"/rides/{ride_id}/assign", json={"driver_email": "d@t.com"}, headers=_auth(tok))
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "assigned"
@@ -136,34 +136,44 @@ def test_manual_assign_success():
     assert body["assigned_at"] is not None
 
 
-def test_manual_assign_inactive_driver_rejected():
-    _driver("d@t.com", 51.0, -114.0, is_active=False)
+def test_manual_assign_requires_authentication():
+    _driver("d@t.com", 51.0, -114.0)
     ride_id = _ride()
 
     r = client.post(f"/rides/{ride_id}/assign", json={"driver_email": "d@t.com"})
+    assert r.status_code in (401, 403)
+
+
+def test_manual_assign_inactive_driver_rejected():
+    _, tok = _driver_with_token("auth@t.com", 51.0, -114.0, status="offline")
+    _driver("d@t.com", 51.0, -114.0, is_active=False)
+    ride_id = _ride()
+
+    r = client.post(f"/rides/{ride_id}/assign", json={"driver_email": "d@t.com"}, headers=_auth(tok))
     assert r.status_code == 400
 
 
 def test_manual_assign_offline_driver_rejected():
-    _driver("d@t.com", 51.0, -114.0, status="offline")
+    _, tok = _driver_with_token("d@t.com", 51.0, -114.0, status="offline")
     ride_id = _ride()
 
-    r = client.post(f"/rides/{ride_id}/assign", json={"driver_email": "d@t.com"})
+    r = client.post(f"/rides/{ride_id}/assign", json={"driver_email": "d@t.com"}, headers=_auth(tok))
     assert r.status_code == 400
     assert "offline" in r.json()["detail"]
 
 
 def test_manual_assign_non_pending_ride_rejected():
-    _driver("d@t.com", 51.0, -114.0)
+    _, tok = _driver_with_token("d@t.com", 51.0, -114.0)
     ride_id = _ride(status="assigned")
 
-    r = client.post(f"/rides/{ride_id}/assign", json={"driver_email": "d@t.com"})
+    r = client.post(f"/rides/{ride_id}/assign", json={"driver_email": "d@t.com"}, headers=_auth(tok))
     assert r.status_code == 400
 
 
 def test_manual_assign_unknown_driver_returns_404():
+    _, tok = _driver_with_token("auth@t.com", 51.0, -114.0, status="offline")
     ride_id = _ride()
-    r = client.post(f"/rides/{ride_id}/assign", json={"driver_email": "ghost@t.com"})
+    r = client.post(f"/rides/{ride_id}/assign", json={"driver_email": "ghost@t.com"}, headers=_auth(tok))
     assert r.status_code == 404
 
 
@@ -171,11 +181,12 @@ def test_manual_assign_unknown_driver_returns_404():
 
 def test_auto_assign_picks_nearest():
     # far driver at lat 51.90, near driver at lat 51.05, pickup at 51.04
+    _, tok = _driver_with_token("auth@t.com", 0.0, 0.0, status="offline")
     _driver("far@t.com",  51.90, -114.0)
     _driver("near@t.com", 51.05, -114.0)
     ride_id = _ride(pickup_lat=51.04, pickup_lon=-114.0)
 
-    r = client.post(f"/rides/{ride_id}/auto-assign")
+    r = client.post(f"/rides/{ride_id}/auto-assign", headers=_auth(tok))
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "assigned"
@@ -183,12 +194,36 @@ def test_auto_assign_picks_nearest():
     assert body["assigned_at"] is not None
 
 
+def test_auto_assign_requires_authentication():
+    ride_id = _ride(pickup_lat=51.04, pickup_lon=-114.0)
+
+    r = client.post(f"/rides/{ride_id}/auto-assign")
+    assert r.status_code in (401, 403)
+
+
+def test_auto_assign_does_not_reuse_busy_driver():
+    _, tok = _driver_with_token("auth@t.com", 0.0, 0.0, status="offline")
+    _driver("near@t.com", 51.05, -114.0)
+    _driver("far@t.com", 51.20, -114.0)
+    first_ride_id = _ride(pickup_lat=51.04, pickup_lon=-114.0)
+    second_ride_id = _ride(pickup_lat=51.04, pickup_lon=-114.0)
+
+    first = client.post(f"/rides/{first_ride_id}/auto-assign", headers=_auth(tok))
+    assert first.status_code == 200
+    assert first.json()["assigned_driver"]["email"] == "near@t.com"
+
+    second = client.post(f"/rides/{second_ride_id}/auto-assign", headers=_auth(tok))
+    assert second.status_code == 200
+    assert second.json()["assigned_driver"]["email"] == "far@t.com"
+
+
 def test_auto_assign_response_shape():
     """Response must match RideRequestOut shape, same as manual assign."""
+    _, tok = _driver_with_token("auth@t.com", 0.0, 0.0, status="offline")
     _driver("d@t.com", 51.05, -114.0)
     ride_id = _ride(pickup_lat=51.04, pickup_lon=-114.0)
 
-    body = client.post(f"/rides/{ride_id}/auto-assign").json()
+    body = client.post(f"/rides/{ride_id}/auto-assign", headers=_auth(tok)).json()
     for field in ("id", "pickup_text", "dropoff_text", "status", "assigned_at", "created_at"):
         assert field in body
 
@@ -196,13 +231,14 @@ def test_auto_assign_response_shape():
 # ── auto-assign: tie-breaker ──────────────────────────────────────────────────
 
 def test_auto_assign_tie_breaker_lower_id_wins():
+    _, tok = _driver_with_token("auth@t.com", 0.0, 0.0, status="offline")
     # Two drivers at identical distance — lower id must win.
     id1 = _driver("first@t.com",  51.05, -114.0)
     id2 = _driver("second@t.com", 51.05, -114.0)
     assert id1 < id2  # confirm seeding order
     ride_id = _ride(pickup_lat=51.04, pickup_lon=-114.0)
 
-    r = client.post(f"/rides/{ride_id}/auto-assign")
+    r = client.post(f"/rides/{ride_id}/auto-assign", headers=_auth(tok))
     assert r.status_code == 200
     assert r.json()["assigned_driver"]["email"] == "first@t.com"
 
@@ -210,70 +246,75 @@ def test_auto_assign_tie_breaker_lower_id_wins():
 # ── auto-assign: error paths ──────────────────────────────────────────────────
 
 def test_auto_assign_no_coords_returns_400():
-    _driver("d@t.com", 51.0, -114.0)
+    _, tok = _driver_with_token("d@t.com", 51.0, -114.0)
     ride_id = _ride()  # no pickup_lat/lon
 
-    r = client.post(f"/rides/{ride_id}/auto-assign")
+    r = client.post(f"/rides/{ride_id}/auto-assign", headers=_auth(tok))
     assert r.status_code == 400
     assert "coordinates" in r.json()["detail"]
 
 
 def test_auto_assign_no_drivers_returns_409():
+    _, tok = _driver_with_token("auth@t.com", 51.0, -114.0, status="offline")
     ride_id = _ride(pickup_lat=51.04, pickup_lon=-114.0)
 
-    r = client.post(f"/rides/{ride_id}/auto-assign")
+    r = client.post(f"/rides/{ride_id}/auto-assign", headers=_auth(tok))
     assert r.status_code == 409
     assert "No available drivers" in r.json()["detail"]
 
 
 def test_auto_assign_non_pending_returns_400():
-    _driver("d@t.com", 51.0, -114.0)
+    _, tok = _driver_with_token("d@t.com", 51.0, -114.0)
     ride_id = _ride(pickup_lat=51.04, pickup_lon=-114.0, status="assigned")
 
-    r = client.post(f"/rides/{ride_id}/auto-assign")
+    r = client.post(f"/rides/{ride_id}/auto-assign", headers=_auth(tok))
     assert r.status_code == 400
     assert "assigned" in r.json()["detail"]
 
 
 def test_auto_assign_missing_ride_returns_404():
-    r = client.post("/rides/99999/auto-assign")
+    _, tok = _driver_with_token("auth@t.com", 51.0, -114.0, status="offline")
+    r = client.post("/rides/99999/auto-assign", headers=_auth(tok))
     assert r.status_code == 404
 
 
 # ── auto-assign: candidate filtering ─────────────────────────────────────────
 
 def test_auto_assign_skips_offline_driver():
-    _driver("offline@t.com", 51.04, -114.0, status="offline")
+    _, tok = _driver_with_token("offline@t.com", 51.04, -114.0, status="offline")
     ride_id = _ride(pickup_lat=51.04, pickup_lon=-114.0)
 
-    r = client.post(f"/rides/{ride_id}/auto-assign")
+    r = client.post(f"/rides/{ride_id}/auto-assign", headers=_auth(tok))
     assert r.status_code == 409  # offline driver is not a candidate
 
 
 def test_auto_assign_skips_inactive_driver():
+    _, tok = _driver_with_token("auth@t.com", 51.0, -114.0, status="offline")
     _driver("inactive@t.com", 51.04, -114.0, is_active=False)
     ride_id = _ride(pickup_lat=51.04, pickup_lon=-114.0)
 
-    r = client.post(f"/rides/{ride_id}/auto-assign")
+    r = client.post(f"/rides/{ride_id}/auto-assign", headers=_auth(tok))
     assert r.status_code == 409  # inactive driver is not a candidate
 
 
 def test_auto_assign_skips_driver_without_location():
+    _, tok = _driver_with_token("auth@t.com", 51.0, -114.0, status="offline")
     # Driver exists and is available, but has no DriverLocation row.
     _driver_no_location("noloc@t.com")
     ride_id = _ride(pickup_lat=51.04, pickup_lon=-114.0)
 
-    r = client.post(f"/rides/{ride_id}/auto-assign")
+    r = client.post(f"/rides/{ride_id}/auto-assign", headers=_auth(tok))
     assert r.status_code == 409  # no DriverLocation → excluded from join
 
 
 def test_auto_assign_only_selects_available_among_mixed():
+    _, tok = _driver_with_token("auth@t.com", 51.0, -114.0, status="offline")
     # One offline, one available — available must win even though offline is closer.
     _driver("offline_near@t.com", 51.041, -114.0, status="offline")
     _driver("available_far@t.com", 51.20,  -114.0, status="available")
     ride_id = _ride(pickup_lat=51.04, pickup_lon=-114.0)
 
-    r = client.post(f"/rides/{ride_id}/auto-assign")
+    r = client.post(f"/rides/{ride_id}/auto-assign", headers=_auth(tok))
     assert r.status_code == 200
     assert r.json()["assigned_driver"]["email"] == "available_far@t.com"
 
@@ -294,6 +335,11 @@ def test_create_auto_mode_assigns_nearest_driver():
     assert body["status"] == "assigned"
     assert body["assigned_driver"]["email"] == "near@t.com"
     assert body["assigned_at"] is not None
+    db = _Session()
+    try:
+        assert db.query(RideRequest).count() == 1
+    finally:
+        db.close()
 
 
 def test_create_auto_mode_missing_coords_returns_400():
@@ -305,6 +351,11 @@ def test_create_auto_mode_missing_coords_returns_400():
     })
     assert r.status_code == 400
     assert "coordinates" in r.json()["detail"]
+    db = _Session()
+    try:
+        assert db.query(RideRequest).count() == 0
+    finally:
+        db.close()
 
 
 def test_create_auto_mode_no_drivers_returns_409():
@@ -315,6 +366,11 @@ def test_create_auto_mode_no_drivers_returns_409():
     })
     assert r.status_code == 409
     assert "No available drivers" in r.json()["detail"]
+    db = _Session()
+    try:
+        assert db.query(RideRequest).count() == 0
+    finally:
+        db.close()
 
 
 def test_create_omitting_assignment_mode_stays_pending():
@@ -328,21 +384,31 @@ def test_create_omitting_assignment_mode_stays_pending():
 # ── cancel ────────────────────────────────────────────────────────────────────
 
 def test_cancel_pending_ride_succeeds():
+    _, tok = _driver_with_token("auth@t.com", 51.0, -114.0, status="offline")
     ride_id = _ride()
-    r = client.post(f"/rides/{ride_id}/cancel")
+    r = client.post(f"/rides/{ride_id}/cancel", headers=_auth(tok))
     assert r.status_code == 200
     assert r.json()["status"] == "cancelled"
 
 
-def test_cancel_non_pending_ride_returns_400():
-    ride_id = _ride(status="assigned")
+def test_cancel_requires_authentication():
+    ride_id = _ride()
+
     r = client.post(f"/rides/{ride_id}/cancel")
+    assert r.status_code in (401, 403)
+
+
+def test_cancel_non_pending_ride_returns_400():
+    _, tok = _driver_with_token("auth@t.com", 51.0, -114.0, status="offline")
+    ride_id = _ride(status="assigned")
+    r = client.post(f"/rides/{ride_id}/cancel", headers=_auth(tok))
     assert r.status_code == 400
     assert "assigned" in r.json()["detail"]
 
 
 def test_cancel_missing_ride_returns_404():
-    r = client.post("/rides/99999/cancel")
+    _, tok = _driver_with_token("auth@t.com", 51.0, -114.0, status="offline")
+    r = client.post("/rides/99999/cancel", headers=_auth(tok))
     assert r.status_code == 404
 
 
@@ -366,7 +432,7 @@ def test_decline_reassigns_to_other_available_driver():
     _driver("far@t.com", 51.20, -114.0)
     ride_id = _ride(pickup_lat=51.04, pickup_lon=-114.0)
 
-    client.post(f"/rides/{ride_id}/auto-assign")
+    client.post(f"/rides/{ride_id}/auto-assign", headers=_auth(near_tok))
 
     r = client.post(f"/driver/rides/{ride_id}/decline", headers=_auth(near_tok))
     assert r.status_code == 200
@@ -380,7 +446,7 @@ def test_decline_stays_pending_when_no_other_drivers():
     _, tok = _driver_with_token("solo@t.com", 51.05, -114.0)
     ride_id = _ride(pickup_lat=51.04, pickup_lon=-114.0)
 
-    client.post(f"/rides/{ride_id}/auto-assign")
+    client.post(f"/rides/{ride_id}/auto-assign", headers=_auth(tok))
 
     r = client.post(f"/driver/rides/{ride_id}/decline", headers=_auth(tok))
     assert r.status_code == 200
@@ -393,7 +459,7 @@ def test_decline_does_not_reassign_to_declining_driver():
     _, tok = _driver_with_token("only@t.com", 51.05, -114.0)
     ride_id = _ride(pickup_lat=51.04, pickup_lon=-114.0)
 
-    client.post(f"/rides/{ride_id}/auto-assign")
+    client.post(f"/rides/{ride_id}/auto-assign", headers=_auth(tok))
 
     r = client.post(f"/driver/rides/{ride_id}/decline", headers=_auth(tok))
     body = r.json()

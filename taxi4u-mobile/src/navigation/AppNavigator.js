@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from '../context/AuthContext';
 import DriverLoginScreen from '../screens/DriverLoginScreen';
 import DriverProfileScreen from '../screens/DriverProfileScreen';
 import DriverRidesScreen from '../screens/DriverRidesScreen';
+import DispatcherManualRideScreen from '../screens/DispatcherManualRideScreen';
 import HomeScreen from '../screens/HomeScreen';
 import MapScreen from '../screens/MapScreen';
 import ResultScreen from '../screens/ResultScreen';
@@ -52,6 +53,11 @@ function RootNavigator() {
             name="DriverRides"
             component={DriverRidesScreen}
             options={{ title: 'My Rides' }}
+          />
+          <Stack.Screen
+            name="DispatcherManualRide"
+            component={DispatcherManualRideScreen}
+            options={{ title: 'Manual Booking' }}
           />
         </>
       ) : (

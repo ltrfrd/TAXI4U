@@ -1,8 +1,15 @@
 from datetime import datetime, timedelta, timezone
+import os
 
 from jose import jwt
 
-SECRET_KEY = "taxi4u-dev-secret-change-in-production"
+from config import TAXI4U_DEV
+
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    if not TAXI4U_DEV:
+        raise RuntimeError("JWT_SECRET_KEY must be set when TAXI4U_DEV is disabled")
+    SECRET_KEY = "taxi4u-dev-secret-change-in-production"
 ALGORITHM = "HS256"
 _EXPIRE_HOURS = 24
 

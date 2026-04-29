@@ -17,6 +17,17 @@ class RideRequestCreate(BaseModel):
     assignment_mode: Literal["manual", "auto"] = "manual"
 
 
+class ManualRideRequestCreate(BaseModel):
+    pickup_text: str
+    dropoff_text: str
+    pickup_lat: float | None = None
+    pickup_lon: float | None = None
+    dropoff_lat: float | None = None
+    dropoff_lon: float | None = None
+    fare_amount: float | None = None
+    driver_email: str | None = None
+
+
 class AssignRideRequest(BaseModel):
     driver_email: str
 

@@ -1,5 +1,5 @@
 PROJECT: TAXI4U
-Last updated: 2026-04-19
+Last updated: 2026-04-29
 
 ---
 
@@ -14,6 +14,7 @@ CURRENT STATE:
 - JWT-authenticated driver accounts (login, status, location, ride actions)
 - Ride booking with manual and auto (nearest-driver) assignment modes
 - Decline-triggered auto-reassignment (excluding declining driver)
+- Assigned drivers are marked busy
 - React Native / Expo mobile app: customer fare+booking flow + driver ride workflow
 
 ---
@@ -48,7 +49,7 @@ BACKEND FILES (repo root):
     SQLAlchemy engine (SQLite taxi4u.db), SessionLocal, Base, get_db() dependency.
 
   config.py
-    Nominatim and OSRM base URLs.
+    Nominatim and OSRM base URLs; TAXI4U_DEV flag.
 
   fares.json
     Source of truth for zone-based pricing matrix.
@@ -74,7 +75,7 @@ MODELS (models/):
   ride_request.py
     RideRequest table: pickup/dropoff text and coords, fare_amount, status,
     driver_id (FK), created_by_id (FK), assigned_at, created_at.
-    status values: pending | assigned | accepted | in_progress | completed | cancelled.
+    lifecycle: pending -> assigned -> accepted -> in_progress -> completed; pending -> cancelled.
 
 ---
 
@@ -92,6 +93,7 @@ SCHEMAS (schemas/):
 
   ride_request.py
     RideRequestCreate — ride creation body; includes optional assignment_mode field.
+    ManualRideRequestCreate — manual booking body; includes optional driver_email.
     AssignRideRequest — manual assignment body (driver_email).
     RideRequestOut — ride response; includes assigned_driver: dict | None.
 
@@ -101,18 +103,19 @@ ROUTERS (routers/):
 
   rides.py
     POST /rides/             Create ride; auto-assigns if assignment_mode="auto".
+    POST /rides/manual        Manual booking; optional driver_email assignment.
     GET  /rides/             List all rides.
     GET  /rides/me/latest    Latest ride created by the authenticated caller.
     GET  /rides/{id}         Single ride by ID.
-    POST /rides/{id}/assign       Manual assign by driver email.
+    POST /rides/{id}/assign       Manual assign by driver email; driver must be available.
     POST /rides/{id}/auto-assign  Nearest available driver auto-assign.
     POST /rides/{id}/cancel       Cancel a pending ride.
+    Assignment marks the driver busy.
 
   driver.py
     POST /driver/login              Authenticate; returns JWT bearer token.
     GET  /driver/available          List active + available drivers.
     GET  /driver/me                 Authenticated driver's profile.
-    GET  /driver/status             Current status.
     POST /driver/status             Update status.
     POST /driver/location           Upsert GPS coordinates.
     GET  /driver/location/me        Retrieve stored location.
@@ -136,16 +139,20 @@ UTILS (utils/):
   auth.py
     hash_password() and verify_password() via bcrypt.
 
+  deps.py
+    get_current_driver() shared JWT dependency for authenticated driver routes.
+
   jwt.py
     create_access_token() and verify_token() using python-jose (HS256, 24 h expiry).
     sub claim stores driver id as string.
+    Uses JWT_SECRET_KEY, with dev fallback only when TAXI4U_DEV is enabled.
 
 ---
 
 TESTS (tests/):
 
   test_assignment.py
-    29 tests covering: _dist unit, manual assign (success + error paths),
+    33 tests covering: _dist unit, manual assign (success + error paths),
     auto-assign (nearest, shape, tie-breaker, error paths, candidate filtering),
     create-time assignment_mode, cancel, and decline auto-reassignment.
     Uses in-memory SQLite via StaticPool; FastAPI dependency_overrides for get_db.
@@ -178,7 +185,7 @@ MOBILE FILES (taxi4u-mobile/):
   src/navigation/AppNavigator.js
     Auth-gated stack navigator.
     Unauthenticated: DriverLogin only.
-    Authenticated: Home, Result, Map, DriverProfile, DriverRides.
+    Authenticated: Home, Result, Map, DriverProfile, DriverRides, DispatcherManualRide.
 
   src/screens/DriverLoginScreen.js
     Email/password form. On success, calls AuthContext.login() with the JWT.
@@ -197,17 +204,23 @@ MOBILE FILES (taxi4u-mobile/):
     Start Trip on accepted, Complete Trip on in_progress.
     Refreshes on screen focus; pull-to-refresh; manual refresh button.
 
+  src/screens/DispatcherManualRideScreen.js
+    Minimal dispatcher/manual booking form.
+    POST /rides/manual with required pickup_text/dropoff_text,
+    optional fare_amount, and optional driver_email assignment.
+
   src/screens/HomeScreen.js
     GPS auto-detects pickup on mount via expo-location + reverseGeocode().
     Both pickup and dropoff support Nominatim autocomplete (debounced 400 ms).
     Selected suggestions preserve lat/lon; manual edits clear saved coords.
     "Calculate Fare" -> navigates to ResultScreen with fare result.
     Last ride card (from GET /rides/me/latest) tappable to ResultScreen.
+    Manual Dispatcher Booking button navigates to DispatcherManualRideScreen.
 
   src/screens/ResultScreen.js
     Dual-mode: fare-estimate mode (result present) and ride-view mode (existingRide only).
     Fare estimate: zone/distance breakdown, route info, fare breakdown.
-    "Book Ride" -> POST /rides/ with assignment_mode="auto"; shows ride status on success.
+    "Book Ride" -> POST /rides/ with assignment_mode="auto" and fare_amount; shows ride status on success.
     Refresh Status button polls GET /rides/{id} while ride is active.
     Cancel Ride button available while status is pending.
     "Open Live Map" -> MapScreen (fare-estimate mode only).
@@ -223,7 +236,7 @@ MOBILE FILES (taxi4u-mobile/):
     calculateFare(), fetchZones(), searchAddresses(), reverseGeocode()
     loginDriver(), getDriverProfile(), updateDriverStatus()
     updateDriverLocation(), getMyLocation()
-    createRide(), getMyLatestRide(), getRideById(), cancelRide()
+    createRide(), createManualRide(), getMyLatestRide(), getRideById(), cancelRide()
     getDriverRides(), rideAction()
     authFetch() helper attaches Bearer token to protected requests.
 

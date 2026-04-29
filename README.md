@@ -35,9 +35,13 @@ Driver Mobile App (same app, driver login gates the flow)
     |     View profile, toggle status (offline/available/busy)
     |     One-tap location share -> POST /driver/location
     |
-    `-- DriverRidesScreen
+    |-- DriverRidesScreen
           Lists assigned rides, sorted by urgency
           Accept / Decline / Start Trip / Complete Trip actions
+    |
+    `-- DispatcherManualRideScreen
+          Manual pickup/dropoff booking -> POST /rides/manual
+          Optional fare amount and optional driver email assignment
 
 Backend (FastAPI, repo root)
     |
@@ -45,7 +49,7 @@ Backend (FastAPI, repo root)
     |     Zone fare from fares.json matrix, or distance fare ($2/km)
     |
     |-- Ride system (routers/rides.py)
-    |     Create, list, assign, auto-assign, cancel
+    |     Create, manual book, list, assign, auto-assign, cancel
     |
     |-- Driver system (routers/driver.py)
     |     Auth, status, location, ride lifecycle actions
@@ -168,13 +172,17 @@ pending -> assigned -> accepted -> in_progress -> completed
         -> cancelled  (from pending only)
 ```
 
-A ride starts as `pending`. Assignment (manual or auto) moves it to `assigned`. The driver accepts it (`accepted`), starts the trip (`in_progress`), and completes it (`completed`). A `pending` ride can be cancelled by the customer.
+A ride starts as `pending`. Assignment (manual or auto) moves it to `assigned`. The driver accepts it (`accepted`), starts the trip (`in_progress`), and completes it (`completed`). A `pending` ride can be cancelled by the customer. Lifecycle: `pending -> assigned -> accepted -> in_progress -> completed`; `pending -> cancelled`.
 
 ### Assignment Logic
+
+**Manual booking** (`POST /rides/manual`): creates a ride from dispatcher-entered pickup/dropoff text with optional `fare_amount`. If `driver_email` is supplied, the ride is assigned to that active, `available` driver.
 
 **Manual assignment** (`POST /rides/{id}/assign`): a driver is specified by email. Driver must be active and `available`.
 
 **Auto-assignment** (`POST /rides/{id}/auto-assign`, or `assignment_mode: "auto"` on ride creation): picks the nearest active `available` driver by straight-line distance from the pickup coordinates. Ties break by lower driver ID.
+
+When a ride is assigned, the assigned driver becomes `busy`.
 
 **Decline and reassignment**: when a driver declines an `assigned` ride, the ride resets to `pending`, then the system immediately tries to assign the next nearest available driver, excluding the one who declined. If no other driver is available, the ride stays `pending`.
 
@@ -220,6 +228,7 @@ A ride starts as `pending`. Assignment (manual or auto) moves it to `assigned`. 
 | Method | Path | Description |
 |---|---|---|
 | `POST` | `/rides/` | Create a ride; `assignment_mode: "auto"` triggers immediate nearest-driver assignment |
+| `POST` | `/rides/manual` | Dispatcher/manual booking; optional `driver_email` assigns an available driver |
 | `GET` | `/rides/` | List all rides |
 | `GET` | `/rides/me/latest` | Latest ride created by the authenticated user |
 | `GET` | `/rides/{id}` | Get a single ride by ID |
@@ -234,7 +243,6 @@ A ride starts as `pending`. Assignment (manual or auto) moves it to `assigned`. 
 | `POST` | `/driver/login` | Authenticate; returns JWT bearer token |
 | `GET` | `/driver/available` | List all active, available drivers |
 | `GET` | `/driver/me` | Authenticated driver's profile |
-| `GET` | `/driver/status` | Current driver status |
 | `POST` | `/driver/status` | Update status (`offline` / `available` / `busy`) |
 | `POST` | `/driver/location` | Update driver's GPS coordinates |
 | `GET` | `/driver/location/me` | Retrieve stored driver location |
@@ -390,7 +398,7 @@ TAXI4U/
 ├── geocoder.py             Nominatim geocoding, Canada-only, Cochrane-anchored
 ├── routing.py              OSRM driving distance and duration
 ├── database.py             SQLAlchemy engine, session factory, Base, get_db()
-├── config.py               Nominatim and OSRM base URLs
+├── config.py               Nominatim and OSRM base URLs; TAXI4U_DEV flag
 ├── fares.json              Fare matrix — source of truth for zone pricing
 ├── pytest.ini              Sets pythonpath=. so pytest finds top-level modules
 ├── backend/
@@ -403,16 +411,17 @@ TAXI4U/
 ├── schemas/
 │   ├── driver.py           DriverCreate, DriverLogin, DriverOut, DriverPublic, DriverStatus
 │   ├── driver_location.py  LocationUpdate, LocationOut
-│   └── ride_request.py     RideRequestCreate, RideRequestOut, AssignRideRequest
+│   └── ride_request.py     RideRequestCreate, ManualRideRequestCreate, RideRequestOut, AssignRideRequest
 ├── routers/
-│   ├── driver.py           All /driver/* endpoints; get_current_driver() JWT dependency
+│   ├── driver.py           All /driver/* endpoints
 │   └── rides.py            All /rides/* endpoints
 ├── utils/
 │   ├── assignment.py       find_nearest_driver() — nearest available driver by Euclidean distance
 │   ├── auth.py             bcrypt password hashing and verification
-│   └── jwt.py              JWT create/verify (HS256, 24 h expiry)
+│   ├── deps.py             Shared FastAPI dependencies, including get_current_driver()
+│   └── jwt.py              JWT create/verify (HS256, 24 h expiry; JWT_SECRET_KEY)
 ├── tests/
-│   └── test_assignment.py  29 tests: manual assign, auto-assign, cancel, decline/reassign
+│   └── test_assignment.py  33 tests: manual assign, auto-assign, cancel, decline/reassign
 └── taxi4u-mobile/
     ├── App.js              Expo entry point
     ├── app.json            Expo config (background location explicitly disabled)
@@ -427,6 +436,7 @@ TAXI4U/
         │   ├── DriverLoginScreen.js        Driver email/password login form
         │   ├── DriverProfileScreen.js      Profile view, status toggle, location share, logout
         │   ├── DriverRidesScreen.js        Driver rides list with Accept/Decline/Start/Complete
+        │   ├── DispatcherManualRideScreen.js Manual dispatcher ride booking
         │   ├── HomeScreen.js               Fare estimate entry, GPS pickup, last ride card
         │   ├── MapScreen.js                Live zone map with GPS tracking and markers
         │   └── ResultScreen.js             Fare display, booking, status refresh, cancel
@@ -511,7 +521,7 @@ Update `API_BASE` in `taxi4u-mobile/src/config.js` to your machine's local IP ad
 - No push notifications. Drivers and customers must manually refresh to see status changes.
 - No WebSockets or live tracking. Ride state is polled on demand.
 - Background location tracking is not implemented (stub only).
-- No dispatcher web UI. Assignment is triggered via the API or the mobile booking flow.
+- No dispatcher web UI. Manual dispatcher booking is available as a minimal authenticated mobile screen.
 - Zone keyword coverage is narrower than polygon coverage; coordinate-based detection is more reliable than free-form text input.
 - The public Nominatim API is rate-limited and intended for low-volume use.
 - The public OSRM endpoint is a demo service and not production-grade.

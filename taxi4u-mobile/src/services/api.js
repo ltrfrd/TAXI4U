@@ -156,6 +156,24 @@ export async function createRide(token, payload) {
   return response.json();
 }
 
+export async function createManualRide(token, payload) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE}/rides/manual`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Manual booking failed (${response.status})`);
+  }
+  return response.json();
+}
+
 export async function getMyLatestRide(token) {
   const response = await authFetch(`${API_BASE}/rides/me/latest`, token);
   if (!response.ok) {

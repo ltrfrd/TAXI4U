@@ -35,6 +35,7 @@ export default function ResultScreen({ navigation, route }) {
         pickup_lon,
         dropoff_lat,
         dropoff_lon,
+        fare_amount: totalFare,
         assignment_mode: 'auto',
       });
       setBookedRide(ride);
@@ -323,22 +324,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '700',
-  },
-  bookConfirm: {
-    backgroundColor: '#1a3a2a',
-    borderRadius: 10,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#2ecc71',
-  },
-  bookConfirmText: {
-    color: '#2ecc71',
-    fontSize: 15,
-    fontWeight: '600',
-    textAlign: 'center',
   },
   bookError: {
     color: '#ff6b6b',

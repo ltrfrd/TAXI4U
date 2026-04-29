@@ -12,6 +12,7 @@ def _do_assign(ride: RideRequest, driver: Driver, db: Session) -> None:
     ride.driver_id = driver.id
     ride.status = "assigned"
     ride.assigned_at = datetime.now(timezone.utc)
+    driver.status = "busy"
     db.commit()
     db.refresh(ride)
 
