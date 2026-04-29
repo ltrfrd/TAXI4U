@@ -183,6 +183,27 @@ export async function getMyLatestRide(token) {
   return response.json();
 }
 
+export async function getAllRides(token) {
+  const response = await authFetch(`${API_BASE}/rides/`, token);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Failed to load rides (${response.status})`);
+  }
+  return response.json();
+}
+
+export async function assignRide(token, rideId, driverEmail) {
+  const response = await authFetch(`${API_BASE}/rides/${rideId}/assign`, token, {
+    method: 'POST',
+    body: JSON.stringify({ driver_email: driverEmail }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Assign failed (${response.status})`);
+  }
+  return response.json();
+}
+
 export async function getRideById(token, rideId) {
   const response = await authFetch(`${API_BASE}/rides/${rideId}`, token);
   if (!response.ok) {

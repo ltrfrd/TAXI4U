@@ -6,6 +6,7 @@ import DriverLoginScreen from '../screens/DriverLoginScreen';
 import DriverProfileScreen from '../screens/DriverProfileScreen';
 import DriverRidesScreen from '../screens/DriverRidesScreen';
 import DispatcherManualRideScreen from '../screens/DispatcherManualRideScreen';
+import DispatcherRidesScreen from '../screens/DispatcherRidesScreen';
 import HomeScreen from '../screens/HomeScreen';
 import MapScreen from '../screens/MapScreen';
 import ResultScreen from '../screens/ResultScreen';
@@ -58,6 +59,11 @@ function RootNavigator() {
             name="DispatcherManualRide"
             component={DispatcherManualRideScreen}
             options={{ title: 'Manual Booking' }}
+          />
+          <Stack.Screen
+            name="DispatcherRides"
+            component={DispatcherRidesScreen}
+            options={{ title: 'Dispatcher Rides' }}
           />
         </>
       ) : (

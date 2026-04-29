@@ -238,6 +238,14 @@ export default function HomeScreen({ navigation }) {
         >
           <Text style={styles.dispatcherButtonText}>Manual Dispatcher Booking</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.dispatcherButton}
+          onPress={() => navigation.navigate('DispatcherRides')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.dispatcherButtonText}>Dispatcher Ride List</Text>
+        </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );
