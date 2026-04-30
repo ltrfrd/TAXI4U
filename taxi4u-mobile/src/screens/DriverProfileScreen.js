@@ -12,6 +12,12 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { getDriverProfile, updateDriverLocation, updateDriverStatus } from '../services/api';
 
+const STATUS_COLOR = {
+  available: '#2ecc71',
+  busy: '#f39c12',
+  offline: '#6c7488',
+};
+
 export default function DriverProfileScreen() {
   const { token, logout } = useAuth();
   const navigation = useNavigation();
@@ -98,6 +104,11 @@ export default function DriverProfileScreen() {
       {driverStatus !== null ? (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Driver Status</Text>
+          <View style={[styles.statusBadge, { backgroundColor: STATUS_COLOR[driverStatus] || '#6c7488' }]}>
+            <Text style={styles.statusBadgeText}>
+              {driverStatus.charAt(0).toUpperCase() + driverStatus.slice(1)}
+            </Text>
+          </View>
           <View style={styles.statusRow}>
             {['offline', 'available', 'busy'].map(s => (
               <TouchableOpacity
@@ -218,7 +229,19 @@ const styles = StyleSheet.create({
   statusRow: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 4,
+    marginTop: 12,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  statusBadgeText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
   statusBtn: {
     flex: 1,

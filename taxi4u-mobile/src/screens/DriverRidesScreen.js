@@ -22,6 +22,18 @@ const STATUS_COLOR = {
 
 const PRIORITY = { assigned: 0, accepted: 1, in_progress: 2 };
 
+const DRIVER_STATUS = {
+  assigned: 'busy',
+  accepted: 'busy',
+  in_progress: 'busy',
+};
+
+const DRIVER_STATUS_COLOR = {
+  available: '#2ecc71',
+  busy: '#f39c12',
+  offline: '#6c7488',
+};
+
 // Buttons to show for each actionable status
 const RIDE_ACTIONS = {
   assigned:    [
@@ -79,6 +91,9 @@ export default function DriverRidesScreen() {
   const sorted = [...rides].sort(
     (a, b) => (PRIORITY[a.status] ?? 3) - (PRIORITY[b.status] ?? 3)
   );
+  const currentStatus = rides.some(ride => DRIVER_STATUS[ride.status] === 'busy')
+    ? 'busy'
+    : 'available';
 
   return (
     <FlatList
@@ -99,6 +114,11 @@ export default function DriverRidesScreen() {
       onRefresh={() => loadRides(true)}
       ListHeaderComponent={
         <View>
+          <View style={[styles.driverStatusBadge, { backgroundColor: DRIVER_STATUS_COLOR[currentStatus] }]}>
+            <Text style={styles.driverStatusText}>
+              {currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}
+            </Text>
+          </View>
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <TouchableOpacity
             style={[styles.refreshBtn, refreshing && { opacity: 0.5 }]}
@@ -121,10 +141,12 @@ function RideCard({ ride, onAction, isActioning, anyActioning, isTop }) {
 
   return (
     <View style={[styles.card, isTop && { borderColor: color, borderWidth: 2 }]}>
-      <View style={styles.routeRow}>
-        <Text style={styles.routeText} numberOfLines={1}>{ride.pickup_text}</Text>
-        <Text style={styles.arrow}>→</Text>
-        <Text style={styles.routeText} numberOfLines={1}>{ride.dropoff_text}</Text>
+      <View style={styles.routeBlock}>
+        <Text style={styles.routeLabel}>Pickup</Text>
+        <Text style={styles.pickupText}>{ride.pickup_text}</Text>
+        <Text style={styles.arrow}>↓</Text>
+        <Text style={styles.routeLabel}>Dropoff</Text>
+        <Text style={styles.dropoffText}>{ride.dropoff_text}</Text>
       </View>
 
       <View style={styles.metaRow}>
@@ -198,6 +220,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 48,
   },
+  driverStatusBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: 12,
+  },
+  driverStatusText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
   card: {
     backgroundColor: '#16213e',
     borderRadius: 12,
@@ -206,22 +241,36 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 12,
   },
-  routeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 10,
+  routeBlock: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#2a2a4a',
+    paddingBottom: 12,
+    marginBottom: 12,
   },
-  routeText: {
-    flex: 1,
+  routeLabel: {
+    color: '#aab2cf',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  pickupText: {
+    color: '#f5f5f5',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  dropoffText: {
     color: '#f5f5f5',
     fontSize: 14,
     fontWeight: '500',
+    lineHeight: 20,
   },
   arrow: {
     color: '#f5c518',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
+    marginVertical: 6,
   },
   metaRow: {
     flexDirection: 'row',
