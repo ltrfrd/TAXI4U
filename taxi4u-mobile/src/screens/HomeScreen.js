@@ -14,7 +14,7 @@ import { useAuth } from '../context/AuthContext';
 import { calculateFare, getMyLatestRide, reverseGeocode, searchAddresses } from '../services/api';
 
 export default function HomeScreen({ navigation }) {
-  const { token } = useAuth();
+  const { token, isDispatcher } = useAuth();
   const [pickup, setPickup] = useState('');
   const [dropoff, setDropoff] = useState('');
   const [pickupSelection, setPickupSelection] = useState(null);
@@ -231,21 +231,25 @@ export default function HomeScreen({ navigation }) {
           </TouchableOpacity>
         ) : null}
 
-        <TouchableOpacity
-          style={styles.dispatcherButton}
-          onPress={() => navigation.navigate('DispatcherManualRide')}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.dispatcherButtonText}>Manual Dispatcher Booking</Text>
-        </TouchableOpacity>
+        {isDispatcher ? (
+          <>
+            <TouchableOpacity
+              style={styles.dispatcherButton}
+              onPress={() => navigation.navigate('DispatcherManualRide')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.dispatcherButtonText}>Manual Dispatcher Booking</Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.dispatcherButton}
-          onPress={() => navigation.navigate('DispatcherRides')}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.dispatcherButtonText}>Dispatcher Ride List</Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.dispatcherButton}
+              onPress={() => navigation.navigate('DispatcherRides')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.dispatcherButtonText}>Dispatcher Ride List</Text>
+            </TouchableOpacity>
+          </>
+        ) : null}
       </View>
     </KeyboardAvoidingView>
   );

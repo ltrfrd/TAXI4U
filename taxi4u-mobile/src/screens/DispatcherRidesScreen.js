@@ -11,16 +11,38 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { assignRide, getAllRides } from '../services/api';
 
+const FILTERS = [
+  { label: 'All', status: 'all' },
+  { label: 'Pending', status: 'pending' },
+  { label: 'Assigned', status: 'assigned' },
+  { label: 'In Progress', status: 'in_progress' },
+  { label: 'Completed', status: 'completed' },
+];
+
+const STATUS_COLORS = {
+  pending: '#6c7488',
+  assigned: '#4a90e2',
+  in_progress: '#f39c12',
+  completed: '#2ecc71',
+  cancelled: '#ff6b6b',
+};
+
 export default function DispatcherRidesScreen() {
   const { token } = useAuth();
   const [rides, setRides] = useState([]);
+  const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [assigningId, setAssigningId] = useState(null);
   const [assignError, setAssignError] = useState('');
+  const visibleRides = statusFilter === 'all'
+    ? rides
+    : rides.filter(ride => ride.status === statusFilter);
 
   async function loadRides(showLoading = true) {
     if (showLoading) setLoading(true);
+    if (!showLoading) setRefreshing(true);
     setError('');
     try {
       setRides(await getAllRides(token));
@@ -28,6 +50,7 @@ export default function DispatcherRidesScreen() {
       setError(err.message || 'Failed to load rides.');
     } finally {
       if (showLoading) setLoading(false);
+      if (!showLoading) setRefreshing(false);
     }
   }
 
@@ -74,9 +97,42 @@ export default function DispatcherRidesScreen() {
     <FlatList
       style={styles.container}
       contentContainerStyle={styles.content}
-      data={rides}
+      data={visibleRides}
       keyExtractor={item => String(item.id)}
-      ListHeaderComponent={assignError ? <Text style={styles.assignError}>{assignError}</Text> : null}
+      ListHeaderComponent={
+        <View>
+          <TouchableOpacity
+            style={[styles.refreshButton, refreshing && styles.buttonDisabled]}
+            onPress={() => loadRides(false)}
+            disabled={refreshing}
+            activeOpacity={0.8}
+          >
+            {refreshing ? (
+              <ActivityIndicator size="small" color="#1a1a2e" />
+            ) : (
+              <Text style={styles.refreshButtonText}>Refresh</Text>
+            )}
+          </TouchableOpacity>
+          <View style={styles.filterRow}>
+            {FILTERS.map(filter => {
+              const active = statusFilter === filter.status;
+              return (
+                <TouchableOpacity
+                  key={filter.status}
+                  style={[styles.filterButton, active && styles.filterButtonActive]}
+                  onPress={() => setStatusFilter(filter.status)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.filterButtonText, active && styles.filterButtonTextActive]}>
+                    {filter.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {assignError ? <Text style={styles.assignError}>{assignError}</Text> : null}
+        </View>
+      }
       ListEmptyComponent={<Text style={styles.empty}>No rides found.</Text>}
       renderItem={({ item }) => (
         <RideRow
@@ -92,13 +148,16 @@ export default function DispatcherRidesScreen() {
 
 function RideRow({ ride, onAssign, assigning, disabled }) {
   const driver = ride.assigned_driver;
+  const statusColor = STATUS_COLORS[ride.status] || '#6c7488';
   const [driverEmail, setDriverEmail] = useState(driver?.email || '');
 
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
         <Text style={styles.rideId}>Ride #{ride.id}</Text>
-        <Text style={styles.status}>{ride.status?.replace('_', ' ')}</Text>
+        <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+          <Text style={styles.status}>{ride.status?.replace('_', ' ')}</Text>
+        </View>
       </View>
       <Text style={styles.label}>Pickup</Text>
       <Text style={styles.value}>{ride.pickup_text}</Text>
@@ -169,6 +228,47 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 12,
   },
+  refreshButton: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#f5c518',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    minWidth: 78,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  refreshButtonText: {
+    color: '#1a1a2e',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  filterButton: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#2a2a4a',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: '#16213e',
+  },
+  filterButtonActive: {
+    backgroundColor: '#f5c518',
+    borderColor: '#f5c518',
+  },
+  filterButtonText: {
+    color: '#f5f5f5',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  filterButtonTextActive: {
+    color: '#1a1a2e',
+  },
   card: {
     backgroundColor: '#16213e',
     borderRadius: 12,
@@ -189,8 +289,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  statusBadge: {
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
   status: {
-    color: '#f5c518',
+    color: '#fff',
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
