@@ -1,0 +1,40 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file: ./backend/.env
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./backend:/app
+
+  worker:
+    build: ./backend
+    command: arq app.background.worker.WorkerSettings
+    env_file: ./backend/.env
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - ./backend:/app
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: taxi4u
+      POSTGRES_PASSWORD: taxi4u
+      POSTGRES_DB: taxi4u
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  postgres_data:

@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(& \"C:\\\\Users\\\\latra\\\\Desktop\\\\TAXI4U\\\\.venv\\\\Scripts\\\\python.exe\" --version)",
+      "PowerShell(docker exec taxi4u-db-1 psql -U taxi4u -d taxi4u -c \"\\\\l\" 2>&1)",
+      "PowerShell(docker exec taxi4u-db-1 psql -U postgres -c \"\\\\du\" 2>&1)",
+      "PowerShell(docker exec taxi4u-db-1 bash -c \"PGPASSWORD=taxi4u psql -h 127.0.0.1 -U taxi4u -d taxi4u -c 'SELECT 1'\" 2>&1)",
+      "PowerShell(& \"C:\\\\Users\\\\latra\\\\Desktop\\\\TAXI4U\\\\.venv\\\\Scripts\\\\python.exe\" -c \"import psycopg2; conn = psycopg2.connect\\('host=127.0.0.1 port=5432 dbname=taxi4u user=taxi4u password=taxi4u'\\); print\\('OK'\\); conn.close\\(\\)\" 2>&1)",
+      "PowerShell(docker exec taxi4u-db-1 psql -U taxi4u -d taxi4u -c \"SELECT usename, passwd FROM pg_shadow WHERE usename='taxi4u';\" 2>&1)",
+      "PowerShell(docker context ls 2>&1)",
+      "PowerShell(docker --context default ps --format \"table {{.Names}}\\\\t{{.Status}}\\\\t{{.Ports}}\" 2>&1)",
+      "PowerShell(Get-Process \"Docker Desktop\" -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Service com.docker.service -ErrorAction SilentlyContinue)"
+    ]
+  }
+}
